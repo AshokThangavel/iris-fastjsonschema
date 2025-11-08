@@ -416,14 +416,29 @@ ClassMethod SampleSchema6()
 		},
 		{
 			"type": "string",
-			"minLength": 5,
+			"minLength": 15,
 			"maxLength": 50,
-			"pattern": "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$",
+			"description": "test sample schema6",
+			//"pattern": "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$",
 			"enum": [
-				"user1@example.com",
-				"user2@example.com",
-				"user3@example.com"
+				"ak1@example.com",
+				"ak2@example.com",
+				"ak@example.com"
 			]
+		},{
+			"type": "integer",
+			"minimum": 0,
+			"exclusiveMinimum": -1,
+			"maximum": 100,
+			"exclusiveMaximum": 101,
+			"multipleOf": 5,
+			"enum": [
+				0,
+				5,
+				10,
+				15
+			],
+			"const": 10
 		}
 	]
 	}
@@ -431,7 +446,7 @@ ClassMethod SampleSchema6()
 
 ClassMethod SampleSchema7()
 {
-	
+
 	ret {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
@@ -527,13 +542,13 @@ ClassMethod SampleSchema7()
 
 ClassMethod SampleSchema8()
 {
-	
+
 	ret {
 	"$schema": "http://json-schema.org/draft-07/schema#",
 	"type": "object",
 	"properties": {
 		"myString": {
-			"type": "string",
+			"type": ["string","integer"],
 			"minLength": 5,
 			"maxLength": 20,
 			"pattern": "^[A-Za-z0-9]+$",

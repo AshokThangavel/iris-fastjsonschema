@@ -17,6 +17,8 @@ ClassMethod Compile(pSchemaName = "", pSchema As %DynamicObject = "", pKeepSourc
 Method CompileInternal() As %Status [ Internal, Private ]
 {
 	d $SYSTEM.Process.Undefined(2)
+	#dim sc As %Status
+
 	k %fjscode
 	try{
 		d ..basicinfo()
@@ -30,95 +32,73 @@ Method CompileInternal() As %Status [ Internal, Private ]
 	q sc
 }
 
-Method sarr(propobj)
-{
-	s prop="input"
-	s %fjscode($i(%fjscode))=" i '$iso(%JSON)||('%JSON.%IsA(""%DynamicArray"")) q ""given input is not array"" "
-	s:propobj.%IsDefined("minLength") min = propobj.minLength
-	s:propobj.%IsDefined("maxLength") max = propobj.maxLength
-	s:propobj.%IsDefined("pattern") pat=propobj.pattern
-	if min'=""||(max'="") s %fjscode($i(%fjscode))=" i $isvalidnum(%JSON.size(),,"_min_","_max_") q ""array size not meets the schema definition"""
-	i propobj.%IsDefined("enum")  d ..enum(propobj.enum)
-	i pat'="" {
-		s:..KeepSource %fjscode($i(%fjscode))=" ; pattern check"
-		s %fjscode($i(%fjscode))=" i '$match(%JSON,"""_pat_""") q ""pattern not match with "_prop_" data"""
-	}
-	d:propobj.%IsDefined("format") ..format(propobj.format,prop)
-	s:propobj.%IsDefined("const") %fjscode($i(%fjscode))=" i %JSON."_prop_"'="""_propobj.const_""" q """_prop_"  value must be "_propobj.const_""""
-	i propobj.%IsDefined("contentEncoding") d ..format(propobj.contentEncoding,prop)
-	i propobj.%IsDefined("contentMediaType") d ..contentMediaType(propobj,prop)
-}
-
-Method GenerateCodeArr(pSchemaObj) [ Private ]
-{
-	s schema = $s(pSchemaObj'="": pSchemaObj, 1: ..Schema)
-    if schema.items.%IsA("%DynamicArray"){ ; [ {} ,{} ]
-    	s iter = schema.items.%GetIterator()
-    }
-    else {
-	    s propobj = schema.items
-	    d $method(,"sarr",propobj)
-	    q
-    }
-    while iter.%GetNext(.cp, .propobj) {
-    	//s:..KeepSource %fjscode($i(%fjscode))=" ;validate "_prop_" schema propery"
-    	i $iso(propobj.type){
-        	d ..arrayprop(propobj)
-    	}
-    	else {
-        	s type=propobj.type
-        	
-        	i type="object" {
-	        	//s:..KeepSource %fjscode($i(%fjscode))=" ;validate "_prop_" schema propery"
-            	d $method(,"GenerateCode",propobj)
-            	continue
-        	}elseif type="array" {
-	            d $method(,"GenerateCodeArr",propobj)
-            }else{
-        	s prop="%Get("_cp_")"
-        	d:type'="" $method(,type,propobj,prop)
-            }
-    	}
-    }
-}
-
 Method GenerateCode(pSchemaObj As %DynamicAbstractObject = "") [ Private ]
 {
     s schema = $s(pSchemaObj'="": pSchemaObj, 1: ..Schema)
     d ..checkrequired(schema)
-    i schema.type="array" d ..GenerateCodeArr(pSchemaObj) q
-    s iter = schema.properties.%GetIterator()
+    s isarrexecute=0
+    i schema.type="array" {
+	    q:'schema.%IsDefined("items")
+	   	if 'schema.items.%IsA("%DynamicArray"){ ;single object in array
+	   		d $method(,"singleArr",schema)
+    		q
+    	}
+	    s iter = schema.items.%GetIterator()
+	    s isarrexecute=1
+    }
+    else {
+	    s iter = schema.properties.%GetIterator()
+    }
     while iter.%GetNext(.prop, .propobj) {
         s:..KeepSource %fjscode($i(%fjscode))=" ;validate "_prop_" schema propery"
         s:..KeepSource&&(propobj.%IsDefined("description")) %fjscode($i(%fjscode))=" ;description given in schema: "_propobj.description_" "
-        i $iso(propobj.type){
-            d ..arrayprop(propobj,prop)
+        s type=propobj.type
+        i isarrexecute s prop="%Get("_prop_")"
+        i $iso(type){ ;array of types
+            d ..arrayproptypevalidate(propobj,prop)
+            s arriter = propobj.type.iterator()
+			while arriter.%GetNext(,.arrPropType) {
+				s:..KeepSource %fjscode($i(%fjscode))=" ;property "_prop_" and it's "_arrPropType_" validation"
+				i arrPropType="object" {
+                	d $method(,"GenerateCode", propobj)
+            	}
+            	elseif arrPropType="array" {
+	            	d $method(,"GenerateCode", propobj)
+            	}else{
+            		d:arrPropType'="" $method(, arrPropType, propobj, prop, 1)
+            	}
+			}
         }
         else {
-            s type=propobj.type
             i type="object" {
-                d $method(,"GenerateCode",propobj)
-                //continue
+                d $method(,"GenerateCode", propobj)
             }
             elseif type="array" {
-	            d $method(,"GenerateCodeArr",propobj)
+	            d $method(,"GenerateCode", propobj)
             }else{
-            	d:type'="" $method(,type,propobj,prop)
+            	d:type'="" $method(,type, propobj, prop)
             }
         }
     }
 }
 
-Method arrayprop(propobj, prop) [ Private ]
+Method arrayproptypevalidate(propobj, prop) [ Private ]
 {
+	s (c,dt)=""
 	s iter = propobj.type.iterator()
-	s c="",dt=""
 	while iter.%GetNext(,.val) {s c=c_..CodeType(val),dt=dt_val_","}
-	s %fjscode($i(%fjscode))=" i "_"'$find("_c_",%JSON.%GetTypeCodeOf("_prop_"))"_" q """_prop_" datatype is should be ["_$e(dt,1,*-1)_"] """
-	s iter = propobj.type.iterator()
-	while iter.%GetNext(,.val) {
-		d:val'="" $method(,val,propobj,prop,1)
-	}
+	s %fjscode($i(%fjscode))=" i "_"'$find("_c_",%JSON.%GetTypeCodeOf("""_prop_"""))"_" q """_prop_" datatype is should be "_$replace($e(dt,1,*-1),","," or ")_" """
+}
+
+Method singleArr(propobj)
+{
+	s %fjscode($i(%fjscode))=" i '$iso(%JSON)||('%JSON.%IsA(""%DynamicArray"")) q ""given input is not array"" "
+	s:propobj.%IsDefined("minItems") min = propobj.minItems
+	s:propobj.%IsDefined("maxItems") max = propobj.maxItems
+	if min'=""||(max'="") s %fjscode($i(%fjscode))=" i '$isvalidnum(%JSON.size(),,"_min_","_max_") q ""array size not meets the schema definition"""
+
+	s type = propobj.items.type
+	d:type'="" $Method(,type,propobj.items,"%Get(0)")
 }
 
 Method checkrequired(pSchemaObj) [ Private ]
@@ -131,7 +111,7 @@ Method checkrequired(pSchemaObj) [ Private ]
 	while iter.%GetNext(,.val) {
 		s %fjscode($i(%fjscode))=" s:'%JSON.%IsDefined("""_val_""") missing=missing_"""_val_","""
 	}
-	s %fjscode($i(%fjscode))=" q:missing'="""" ""Missing required properties: [""_$e(missing,1,*-1)_""]"" "
+	s %fjscode($i(%fjscode))=" q:missing'="""" ""Required properties missing: ""_$e(missing,1,*-1)_"""" "
 	q
 }
 
@@ -140,13 +120,8 @@ Method string(propobj As %DynamicObject, prop As %String = "", skipbasicchk = 0)
 	s:propobj.%IsDefined("minLength") min = propobj.minLength
 	s:propobj.%IsDefined("maxLength") max = propobj.maxLength
 	s:propobj.%IsDefined("pattern") pat=propobj.pattern
-	//s %fjscode($i(%fjscode))=" i '%JSON.%IsDefined("""_prop_""") q """_prop_" not available in the json"""
-	//s %fjscode($i(%fjscode))=" i %JSON.%GetTypeOf("""_prop_""")'=""string"" q "" "_prop_"  must be a string type"""
-	if 'skipbasicchk {
-		s %fjscode($i(%fjscode))=" i %JSON.%GetTypeCodeOf("""_$S(prop["%Get(":+$P(prop,"%Get("),1:prop)_""")'=6 q """_prop_" must be a string type"""
-		if min'=""!(max'="") s %fjscode($i(%fjscode))=" i '$IsValidnum($Length(%JSON."_prop_"),,"_min_","_max_") q "" "_prop_" length not match"""
-	}
-	i propobj.%IsDefined("enum")  d ..enum(propobj.enum,prop)
+	s:'skipbasicchk %fjscode($i(%fjscode))=" i %JSON.%GetTypeCodeOf("""_$S(prop["%Get(":+$P(prop,"%Get(",2),1:prop)_""")'=6 q """_prop_" must be a string type"""
+	if min'=""!(max'="") s %fjscode($i(%fjscode))=" i '$IsValidnum($Length(%JSON."_prop_"),,"_min_","_max_") q "" "_prop_" length not match"""
 	i pat'="" {
 		s:..KeepSource %fjscode($i(%fjscode))=" ; pattern check"
 		i prop'=""{
@@ -156,6 +131,7 @@ Method string(propobj As %DynamicObject, prop As %String = "", skipbasicchk = 0)
 			s %fjscode($i(%fjscode))=" i '$match(%JSON,"""_pat_""") q ""pattern not match with "_prop_" json data"""
 		}
 	}
+	i propobj.%IsDefined("enum")  d ..enum(propobj.enum,prop)
 	d:propobj.%IsDefined("format") ..format(propobj.format,prop)
 	s:propobj.%IsDefined("const") %fjscode($i(%fjscode))=" i %JSON."_prop_"'="""_propobj.const_""" q """_prop_"  value must be "_propobj.const_""""
 	i propobj.%IsDefined("contentEncoding") {
@@ -176,14 +152,13 @@ Method integer(propobj As %DynamicObject, prop As %String, skipbasicchk = 0) [ P
 	s:propobj.%IsDefined("exclusiveMinimum") emin = propobj.exclusiveMinimum
 	s:propobj.%IsDefined("exclusiveMaximum") emax = propobj.exclusiveMaximum
 	s:propobj.%IsDefined("multipleOf") pat=propobj.multipleOf
-	//s %fjscode($i(%fjscode))=" i '%JSON.%IsDefined("""_prop_""") q """_prop_" not available in the json"""
-	//s %fjscode($i(%fjscode))=" i '$IsValidnum(%JSON."_prop_") q "" "_prop_"datatype not match with the json value"""
-	s:'skipbasicchk %fjscode($i(%fjscode))=" i %JSON.%GetTypeCodeOf("""_prop_""")'=9 q """_prop_" datatype not match with the json value"""
+	s:'skipbasicchk %fjscode($i(%fjscode))=" i %JSON.%GetTypeCodeOf("""_$S(prop["%Get(":+$P(prop,"%Get(",2),1:prop)_""")'=9 q """_prop_" datatype not match with the json value"""
 	i (min'="")!(max'="")!(emin'="")!(emax'=""){
 		s %fjscode($i(%fjscode))=" i '$IsValidnum($Length(%JSON."_prop_"),,"_$s(emin'="":emin,1:min)_","_$s(emax'="":emax,1:max)_") q """_prop_" length not match"""
 	}
 	d:propobj.%IsDefined("enum") ..enum(propobj.enum,prop)
-	s:propobj.%IsDefined("const") %fjscode($i(%fjscode))=" i %JSON."_prop_"'="_propobj.const_" q """_prop_"  value must be "_$case(propobj.const,1:"true",:"false")_""""
+	s:propobj.%IsDefined("const") %fjscode($i(%fjscode))=" i %JSON."_prop_"'="""_propobj.const_""" q """_prop_"  value must be "_propobj.const_""""
+	// TODO: implement multipleOf
 }
 
 Method boolean(propobj As %DynamicObject, prop As %String, skipbasicchk = 0) [ Private ]
@@ -223,14 +198,14 @@ Method array(propobj As %DynamicObject, prop As %String, skipbasicchk = 0) [ Pri
 {
 }
 
-Method enum(enum As %DynamicArray, prop As %String = "")
+Method enum(enum As %DynamicArray, prop As %String = "") [ Internal ]
 {
 	s %fjscode($i(%fjscode))=" ; enum check"
 	s iter = enum.%GetIterator()
 	;s c="" while iter.%GetNext(,.v) {s c=c_v_","} s c=","_c
 	;s %fjscode($i(%fjscode))=" i """_c_"""'[("",""_"_"%JSON."_prop_"_"","") q ""enum not match with "_prop_" json data"" "
 	s c="$lb(" while iter.%GetNext(,.v) {s c=c_$case($isvalidnum(v),1:v,:""""_v_"""")_","} s c=$E(c,1,*-1)_")"
-	if prop'="" {
+	if prop'="",prop'["%Get" {
 		s %fjscode($i(%fjscode))=" i '$lf("_c_",%JSON."_prop_") q ""enum not match with "_prop_" json data"" "
 	}
 	else{
@@ -238,8 +213,9 @@ Method enum(enum As %DynamicArray, prop As %String = "")
 	}
 }
 
-Method format(format As %String, prop As %String)
+Method format(format As %String, prop As %String) [ Internal ]
 {
+	s:..KeepSource %fjscode($i(%fjscode))=" ;format check"
 	s regex = $case(format, "email":"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$","uri":"^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$",
 			"date":"^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$","datetime":"^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(Z|[+-]([01]\d|2[0-3]):?[0-5]\d)?$",
 			"uuid":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
@@ -265,13 +241,13 @@ Method oneOf(propobj As %DynamicObject, prop As %String)
 {
 }
 
-Method contentMediaType(propobj As %DynamicObject, prop As %String) [ Internal ]
+Method contentMediaType(propobj As %DynamicObject, prop As %String) [ Internal, Private ]
 {
 
 	q 1
 }
 
-Method configfunc() [ Internal ]
+Method configfunc() [ Internal, Private ]
 {
 	s %fjscode($i(%fjscode))="%validate(%JSON)"
 	s %fjscode($i(%fjscode))=" n (%JSON)"
@@ -279,7 +255,7 @@ Method configfunc() [ Internal ]
 	s %fjscode($i(%fjscode))=" s:'$iso(%JSON) %JSON={}.%FromJSON(%JSON)"
 }
 
-Method basicinfo() [ Internal ]
+Method basicinfo() [ Internal, Private ]
 {
 	q:'..KeepSource
 	s %fjscode($i(%fjscode))=" ;Generated by FastJsonSchema.Compiler"
@@ -292,15 +268,11 @@ Method basicinfo() [ Internal ]
 
 Method Savefjs()
 {
-	i ..KeepSource{
-		s rot="aaschema."_..Name_".int"
-		if ##class(%Routine).%ExistsId(rot){
-			s routine = ##class(%Routine).%OpenId(rot)
-			s routine.RoutineVersion=routine.RoutineVersion+1
-		}
-		else {
-			s routine = ##class(%Routine).%New(rot)
-		}
+	s %fjscode($i(%fjscode))=" q 1"
+	i ..KeepSource {
+		s rot="fjsschema."_..Name_".int"
+		//do:##class(%Routine).%Exists($lb(rot)) ##class(%Routine).%Delete($lb(rot))
+		s routine = ##class(%Routine).%New(rot)
 		s routine.Generated=1
 		if $iso(routine) f i=1:1:%fjscode d routine.WriteLine(%fjscode(i))
 		s rtn=routine.%Save()
@@ -309,9 +281,8 @@ Method Savefjs()
 	else {
 		s %fjscode(0)=%fjscode
 		s rtn=$COMPILE(%fjscode,0,errs,,,,"aaschema."_..Name)
-    	i rtn=0 {w "schema successfully generated",!}
-    	else {w "no OBJ code generated return code: ",rtn,! zw errs  q}
-		;generate code
+    	i rtn=0 {w "compilation successfull",! s rtn=1}
+    	else {w "compilation failred return code: ",rtn,! zw err s rtn=0}
 	}
 	ret rtn
 }
@@ -322,52 +293,6 @@ Method %OnNew(pSchemaName As %String, pSchema As %DynamicAbstractObject, pKeepSo
 	s ..Schema = pSchema
 	s ..KeepSource = pKeepSource
 	q 1
-}
-
-Method GenerateCode1() [ Deprecated ]
-{
-	d ..checkrequired()
-	s iter = ..Schema.properties.%GetIterator()
-	While iter.%GetNext(.prop, .propobj) {
-		continue:$Data(..ProcessesFields(prop))
-		s:..KeepSource %fjscode($i(%fjscode))=" ;validate "_prop_" schema propery"
-		s:propobj.%IsDefined("description") %fjscode($i(%fjscode))=" ;description: "_propobj.description
-		i $iso(propobj.type){
-			d ..arrayprop(propobj,prop)
-		}else{
-			s type=propobj.type
-			s:type="object" type="GenerateCode"
-			d:type'="" $method(,type,propobj,prop)
-		}
-}
-}
-
-Method checkrequiredduplic(pSchemaObj) [ Deprecated ]
-{
-	s schema = $s(pSchemaObj'="": pSchemaObj, 1: ..Schema)
-	ret:'schema.%IsDefined("required")
-	s iter = schema.required.iterator()
-
-	s:..KeepSource %fjscode($i(%fjscode))=" ;validate the required schema propery is are available"
-	s %fjscode($i(%fjscode))=" s missing="""""
-	while iter.%GetNext(,.val) {
-		s %fjscode($i(%fjscode))=" s:'%JSON.%IsDefined("""_val_""") missing=missing_"""_val_","""
-	}
-	s %fjscode($i(%fjscode))=" q:missing'="""" ""Missing required properties: [""_$e(missing,1,*-1)_""]"" "
-	 q
-	;
-	/*s iter = ..Schema.required.iterator() Set c="$LB(" while iter.%GetNext(,.val) {Set c=c_""""_val_""""_","} s c=$E(c,1,*-1)_")"
-	s %fjscode($i(%fjscode))=" s ptr=0,missing="""" while $ListNext("_c_",ptr,val) {if '%JSON.%IsDefined(val) s missing=missing_val_"",""} "*/
-	;
-	s %fjscode($i(%fjscode))=" q:missing'="""" ""Missing required properties: [""_$e(missing,1,*-1)_""]"" "
-	s iter = schema.required.iterator()
-	while iter.%GetNext(,.val) {
-		s propobj = schema.properties.%Get(val)
-		s $List(props,$i(i))=val
-		s:..KeepSource %fjscode($i(%fjscode))=" ;validate "_val_" schema propery"
-		d:propobj.type'="" $method(,propobj.type,propobj,val)
-		s ..ProcessesFields(val)=""
-	}
 }
 
 }

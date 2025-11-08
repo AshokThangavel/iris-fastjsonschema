@@ -48,7 +48,7 @@ ClassMethod Validate(pSchemaName As %String = "", pJson As %DynamicObject)
 	If $IsObject(pJson) {
 		Set pJson = pJson.%ToJSON()
 	}
-	Return $Xecute("quit $$%validate^aaschema."_pSchemaName_"("_pJson_") ")
+	Return $Xecute("quit $$%validate^fjsschema."_pSchemaName_"("_pJson_") ")
 }
 
 }
