@@ -1,7 +1,7 @@
 Class FastJsonSchema.Tests.TestDatas Extends %RegisteredObject
 {
 
-ClassMethod SampleSchema()
+ClassMethod SampleSchema1()
 {
 
 	Set pSchema = {

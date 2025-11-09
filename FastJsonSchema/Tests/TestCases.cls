@@ -3,11 +3,21 @@ Class FastJsonSchema.Tests.TestCases Extends %UnitTest.TestCase
 
 /// include testcases in future
 /// for now uses as a utils
-ClassMethod DebugCompile(pSchemaName = "Test3", pSchema As %DynamicObject = "", pKeepSource As %Boolean = 1)
+ClassMethod RunSingleTest(pSchemaName = "Test5", pSchema As %DynamicObject = "", pKeepSource As %Boolean = 1)
 {
-	Set pSchema = ##class(TestDatas).SampleSchema3()
+	Set pSchema = ##class(TestDatas).SampleSchema5()
 	Set sc = ##class(FastJsonSchema.Compiler).Compile(pSchemaName, pSchema, pKeepSource)
 	if $$$ISERR(sc) W $SYSTEM.OBJ.DisplayError(sc)
+}
+
+ClassMethod RullAllTest(pSchemaName = "Test5", pSchema As %DynamicObject = "", pKeepSource As %Boolean = 1)
+{
+	F i=1:1:8 {
+		s pSchemaName = "Test"_i
+		s pSchema = $ClassMethod("FastJsonSchema.Tests.TestDatas","SampleSchema"_i)
+		Set sc = ##class(FastJsonSchema.Compiler).Compile(pSchemaName, pSchema, pKeepSource)
+		if $$$ISERR(sc) W $SYSTEM.OBJ.DisplayError(sc)
+	}
 }
 
 }
