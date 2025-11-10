@@ -98,7 +98,7 @@ Method MultiTypePropValidate(prop) [ Private ]
 	s (c,dt)=""
 	s iter = ..PropertySchema.type.iterator()
 	while iter.%GetNext(,.val) {s c=c_..CodeType(val),dt=dt_val_","}
-	$$$WriteLine($$$FormatText(" i '$find(%1,%JSON.%GetTypeCodeOf(""%2"")) q $$Error^%apiOBJ(5001,""%3 datatype is should be %4"")", c, prop, prop, $replace($e(dt,1,*-1),","," or ")))
+	$$$WriteLine($$$FormatText(" i '$find(%1,%JSON.%GetTypeCodeOf(""%2"")) q $$Error^%apiOBJ(5001,""Data type validation failed for property """"%3"""". Valid types are: %4"")", c, prop, prop, $replace($e(dt,1,*-1),","," or ")))
 }
 
 Method singleArr() [ Private ]
@@ -147,7 +147,7 @@ Method number(prop As %String, SkipGenerate = 0)
 Method integer(prop As %String, SkipGenerate = 0)
 {
 	$$$CWriteLine(" ;integer method validation for "_prop,..KeepSource)
-	$$$CWriteLine(" i %JSON.%GetTypeCodeOf("""_$S(prop["%Get(":+$P(prop,"%Get(",2),1:prop)_""")'=9 q $$Error^%apiOBJ(5001,"""_$S(prop["%Get(":"",1:prop)_" datatype not match with the json value"")",'SkipGenerate)
+	$$$CWriteLine(" i %JSON.%GetTypeCodeOf("""_$S(prop["%Get(":+$P(prop,"%Get(",2),1:prop)_""")'=9 q $$Error^%apiOBJ(5001,""Data type of property "_$S(prop["%Get(":"",1:prop)_" does not match with the JSON value"")",'SkipGenerate)
 	d ..GenerateLengthCode(prop, $$$CurrentMethod)
 	d ..GenerateEnumCode(prop)
 	d ..GenerateConstCode(prop)
@@ -157,8 +157,8 @@ Method integer(prop As %String, SkipGenerate = 0)
 Method boolean(prop As %String, SkipGenerate = 0)
 {
 	i 'SkipGenerate{
-		$$$WriteLine(" i %JSON.%GetTypeCodeOf("""_prop_""")'=4 q $$Error^%apiOBJ(5001,"""_prop_" datatype not match with the json value"")")
-		$$$WriteLine(" s bv=%JSON."_prop_" if $c(0,1)'[$c(bv) q $$Error^%apiOBJ(5001,"""_prop_" is not boolean value"")")
+		$$$WriteLine(" i %JSON.%GetTypeCodeOf("""_prop_""")'=4 q $$Error^%apiOBJ(5001,""Data type of property """""_prop_""""" does not match with the JSON value"")")
+		$$$WriteLine(" s bv=%JSON."_prop_" if $c(0,1)'[$c(bv) q $$Error^%apiOBJ(5001,""proeprty """""_prop_""""" is not a boolean value"")")
 	}
 	d ..GenerateConstCode(prop)
 	d ..GenerateEnumCode(prop)
@@ -217,13 +217,13 @@ Method GenerateLengthCode(prop As %String = "", type As %String = "")
     }
     s:prop["%Get" prop=""
     i (min'=""),(max'="") {
-        $$$WriteLine($$$FormatText(" s len=%1 i (len<%2)||(len>%3) q $$Error^%apiOBJ(5001,""%4Invalid length: value must be between %5 to %6"")", lenExpr, +min, max, prop, +min, max))
+        $$$WriteLine($$$FormatText(" s len=%1 i (len<%2)||(len>%3) q $$Error^%apiOBJ(5001,""Property %4 has an invalid length: Value must be between %5 to %6"")", lenExpr, +min, max, prop, +min, max))
     }
     elseif min'=""&&(max=""){
-        $$$WriteLine($$$FormatText(" i %1<%2 q $$Error^%apiOBJ(5001,""%3Invalid length: value must be greater than or equal to %4"")", lenExpr, +min, prop, +min))
+        $$$WriteLine($$$FormatText(" i %1<%2 q $$Error^%apiOBJ(5001,""Property %3 has an invalid length: value must be greater than or equal to %4"")", lenExpr, +min, prop, +min))
     }
     elseif min=""&&(max'=""){
-       $$$WriteLine($$$FormatText(" i '%1>%2 q $$Error^%apiOBJ(5001,""%3Invalid length: value must be less than or equal to %4"")", lenExpr, max, prop, max))
+       $$$WriteLine($$$FormatText(" i '%1>%2 q $$Error^%apiOBJ(5001,""Property %3 has an invalid length: value must be less than or equal to %4"")", lenExpr, max, prop, max))
     }
 }
 
@@ -241,7 +241,7 @@ Method UniqueCheck() [ Internal ]
 	$$$WriteLine("unqiueItemsCheck(%JSON){")
 	$$$WriteLine(" s iter=%JSON.%GetIterator()")
 	$$$WriteLine(" while iter.%GetNext(,.val) {")
-	$$$WriteLine("	i $d(uniqueCheck(val)) ret ""Each value must be unique. Duplicate found for ""_val")
+	$$$WriteLine("	i $d(uniqueCheck(val)) ret $$Error^%apiOBJ(5001,""Each value must be unique. Duplicate found for ""_val)")
 	$$$WriteLine("	s uniqueCheck(val)=""""")
 	$$$WriteLine(" }")
 	$$$WriteLine(" q 1")
@@ -250,26 +250,28 @@ Method UniqueCheck() [ Internal ]
 
 Method GenerateEnumCode(prop As %String = "") [ Internal ]
 {
-	s PropertySchema = ..PropertySchema
+	
+	s PropertySchema=..PropertySchema
 	q:'PropertySchema.%IsDefined("enum")
 	$$$CWriteLine(" ; enum check",..KeepSource)
 	s iter = PropertySchema.enum.%GetIterator()
 	s c="$lb(" while iter.%GetNext(,.v) {s c=c_$case($isvalidnum(v),1:v,:""""_v_"""")_","} s c=$E(c,1,*-1)_")"
 	i prop'="",(prop'["%Get") {
-		$$$WriteLine(" i '$lf("_c_",%JSON."_prop_") q $$Error^%apiOBJ(5001,""enum not match with "_prop_" json data"")")
+		$$$WriteLine(" i '$lf("_c_",%JSON."_prop_") q $$Error^%apiOBJ(5001,""Invalid value of property "_prop_". Value must match one of the allowed enum items."")")
 	}
 	else{
-		$$$WriteLine(" i %JSON.%IsA(""%DynamicArray"") s enumsval="_c_" s iter=%JSON.%GetIterator() while iter.%GetNext(,.v){ i '$lf(enumsval,v) ret ""input not match with the schema enum values"" }")
+		$$$WriteLine(" i %JSON.%IsA(""%DynamicArray"") {s enumsval="_c_"  ")
+		$$$WriteLine(" s iter=%JSON.%GetIterator() while iter.%GetNext(,.v){ i '$lf(enumsval,v) ret ""Invalid value. Value must match one of the allowed enum items."" }}")
 	}
 }
 
 Method GeneratePatternCode(prop As %String = "")
 {
-	s PropertySchema = ..PropertySchema
+	s PropertySchema=..PropertySchema
 	q:'PropertySchema.%IsDefined("pattern")
 	s pat = PropertySchema.pattern
 	$$$CWriteLine(" ; pattern check",..KeepSource)
-	$$$WriteLine($$$FormatText(" i '$match(%JSON.%1,""%2"") q $$Error^%apiOBJ(5001,""pattern not match with %3 json data"")", prop, pat, prop))
+	$$$WriteLine($$$FormatText(" i '$match(%JSON.%1,""%2"") q $$Error^%apiOBJ(5001,""Property %3 does not match required pattern."")", prop, pat, prop))
 }
 
 Method GenerateFormatCode(prop As %String)
@@ -278,7 +280,7 @@ Method GenerateFormatCode(prop As %String)
 	s format = ..PropertySchema.format
 	$$$CWriteLine(" ; "_format_" format check",..KeepSource)
 	s regex = ..RegexFormats(format)
-	$$$CWriteLine(" i '$match(%JSON."_prop_","""_regex_""") q $$Error^%apiOBJ(5001,"""_format_" format not matched"")",(regex'=""))
+	$$$CWriteLine(" i '$match(%JSON."_prop_","""_regex_""") q $$Error^%apiOBJ(5001,""Property "_prop_" does not match the expected "_format_" format"")",(regex'=""))
 }
 
 // TODO: implement multipleOf
@@ -291,6 +293,7 @@ Method GenerateMultipleOfCode(prop)
 Method GenerateConstCode(prop)
 {
 	q:'..PropertySchema.%IsDefined("const")
+	$$$CWriteLine(" ; const check",..KeepSource)
 	s PropertySchema = ..PropertySchema
 	s const = PropertySchema."const"
 	i PropertySchema.type="boolean" {
@@ -365,6 +368,7 @@ Method configfunc() [ Internal, Private ]
 	$$$WriteLine(" n (%JSON)")
 	$$$WriteLine(" s $et=""q $ze""")
 	$$$WriteLine(" s:'$iso(%JSON) %JSON={}.%FromJSON(%JSON)")
+	$$$WriteLine(" i '$iso(%JSON)||(%JSON.IsA(""%DynamicAbstractObject"")) q $$Error^%apiOBJ(16002)")
 }
 
 Method basicinfo() [ Internal, Private ]
