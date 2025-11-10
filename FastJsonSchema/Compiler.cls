@@ -217,13 +217,13 @@ Method GenerateLengthCode(prop As %String = "", type As %String = "")
     }
     s:prop["%Get" prop=""
     i (min'=""),(max'="") {
-        $$$WriteLine($$$FormatText(" i '$IsValidnum(%1,,%2,%3) q $$Error^%apiOBJ(5001,""%4Invalid length: value must be between %5 to %6"")", lenExpr, +min, max, prop, +min, max))
+        $$$WriteLine($$$FormatText(" s len=%1 i (len<%2)||(len>%3) q $$Error^%apiOBJ(5001,""%4Invalid length: value must be between %5 to %6"")", lenExpr, +min, max, prop, +min, max))
     }
     elseif min'=""&&(max=""){
-        $$$WriteLine($$$FormatText(" i '$IsValidnum(%1,,%2) q $$Error^%apiOBJ(5001,""%3Invalid length: value must be greater than or equal to %4"")", lenExpr, +min, prop, +min))
+        $$$WriteLine($$$FormatText(" i %1<%2 q $$Error^%apiOBJ(5001,""%3Invalid length: value must be greater than or equal to %4"")", lenExpr, +min, prop, +min))
     }
     elseif min=""&&(max'=""){
-       $$$WriteLine($$$FormatText(" i '$IsValidnum(%1,,0,%2) q $$Error^%apiOBJ(5001,""%3Invalid length: value must be less than or equal to %4"")", lenExpr, max, prop, max))
+       $$$WriteLine($$$FormatText(" i '%1>%2 q $$Error^%apiOBJ(5001,""%3Invalid length: value must be less than or equal to %4"")", lenExpr, max, prop, max))
     }
 }
 
