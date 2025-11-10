@@ -1,23 +1,14 @@
 Class FastJsonSchema.Tests.TestCases Extends %UnitTest.TestCase
 {
 
-/// include testcases in future
-/// for now uses as a utils
-ClassMethod RunSingleTest(pSchemaName = "Test5", pSchema As %DynamicObject = "", pKeepSource As %Boolean = 1)
+Method TestSchema5()
 {
-	Set pSchema = ##class(TestDatas).SampleSchema5()
-	Set sc = ##class(FastJsonSchema.Compiler).Compile(pSchemaName, pSchema, pKeepSource)
-	if $$$ISERR(sc) W $SYSTEM.OBJ.DisplayError(sc)
-}
-
-ClassMethod RullAllTest(pSchemaName = "Test5", pSchema As %DynamicObject = "", pKeepSource As %Boolean = 1)
-{
-	F i=1:1:8 {
-		s pSchemaName = "Test"_i
-		s pSchema = $ClassMethod("FastJsonSchema.Tests.TestDatas","SampleSchema"_i)
-		Set sc = ##class(FastJsonSchema.Compiler).Compile(pSchemaName, pSchema, pKeepSource)
-		if $$$ISERR(sc) W $SYSTEM.OBJ.DisplayError(sc)
-	}
+	;generate schema
+	Set st = ##class(TestUtils).RunSingleTest("Test5",##class(TestDatas).SampleSchema5())
+	Do $$$AssertEquals(st,1, st)
+	;validate the schema
+	Do $$$AssertEquals(##class(TestUtils).ValidateTestCase("Test5", ##class(TestDatas).SampleSchemaData5(1)), 1, "schema matched with data")
+    Do $$$AssertNotEquals(##class(TestUtils).ValidateTestCase("Test5", ##class(TestDatas).SampleSchemaData5(0)), 1, "schema not matched with data")
 }
 
 }

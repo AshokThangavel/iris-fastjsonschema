@@ -58,8 +58,18 @@ ClassMethod Validate(pSchemaName As %String = "", pJson As %DynamicObject) As %S
 
 ClassMethod IsSchemaImplemented(pSchema As %String = "", Output pSchemaClass As %String)
 {
-	#dim schemaDict as %DynamicObject = {"draft-07": "Compiler"}
-	Return schemaDict.%Get(pSchema)
+	#dim schemaDict as %DynamicObject = ..SupportedJSONSchemaList()
+	Return schemaDict.%Get($Piece(pSchema,"/",4))
+}
+
+/// include the draft names in the below list.
+/// key: draft version
+/// value: Specific implementation class for that draft
+ClassMethod SupportedJSONSchemaList() As %DynamicObject [ CodeMode = expression ]
+{
+{
+	"draft-07": "Compiler"
+}
 }
 
 }

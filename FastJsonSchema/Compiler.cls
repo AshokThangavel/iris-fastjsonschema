@@ -7,16 +7,17 @@ Property Name As %String;
 
 Property Schema As %DynamicAbstractObject;
 
-Property ProcessesFields [ MultiDimensional ];
-
-Property KeepSource As %Boolean [ InitialExpression = 0 ];
+Property KeepSource As %Boolean [ InitialExpression = 0, Internal ];
 
 /// Holds the schema definition for each property when that property's code is generated.
-Property PropertySchema As %DynamicObject;
+Property PropertySchema As %DynamicObject [ Internal ];
 
-ClassMethod Compile(pSchemaName = "", pSchema As %DynamicObject = "", pKeepSource As %Boolean = 0) [ CodeMode = expression, Internal ]
+ClassMethod Compile(pSchemaName = "", pSchema As %DynamicObject = "", pKeepSource As %Boolean = 0)
 {
-..%New(pSchemaName, pSchema, pKeepSource).CompileInternal()
+	d ..OnBeforeCompile()
+	s st=..%New(pSchemaName, pSchema, pKeepSource).CompileInternal()
+	d ..OnAfterCompile()
+	q st
 }
 
 Method CompileInternal() As %Status [ Internal, Private ]
@@ -24,7 +25,7 @@ Method CompileInternal() As %Status [ Internal, Private ]
 	d $SYSTEM.Process.Undefined(2)
 	#dim sc As %Status
 
-	k %fjscode
+	k %fjscode,%uniquecheck
 	try{
 		d ..basicinfo()
 		d ..configfunc()
@@ -44,7 +45,8 @@ Method GenerateCode(pSchemaObj As %DynamicAbstractObject = "") [ Private ]
     s isarrexecute=0
     i schema.type="array" {
 	    q:'schema.%IsDefined("items")
-	   	if 'schema.items.%IsA("%DynamicArray"){ ;single object in array
+	    $$$CWriteLine(" ;validate array items schema",..KeepSource)
+	    if 'schema.items.%IsA("%DynamicArray"){ ;single object in array
 	   		s ..PropertySchema=schema
 	   		d $method(,"singleArr")
     		q
@@ -57,15 +59,15 @@ Method GenerateCode(pSchemaObj As %DynamicAbstractObject = "") [ Private ]
     }
     while iter.%GetNext(.prop, .PropertySchema) {
 	    Set ..PropertySchema = PropertySchema
-        s:..KeepSource %fjscode($i(%fjscode))=" ;validate "_prop_" schema propery"
-        s:..KeepSource&&(PropertySchema.%IsDefined("description")) %fjscode($i(%fjscode))=" ;description given in schema: "_PropertySchema.description_" "
+        $$$CWriteLine(" ;validate "_prop_" schema propery",..KeepSource)
+        $$$CWriteLine(" ;description given in schema: "_PropertySchema.description_" ",..KeepSource&&(PropertySchema.%IsDefined("description")))
         s type=PropertySchema.type
         i isarrexecute s prop="%Get("_prop_")"
         i $iso(type){ ;array of types
             d ..MultiTypePropValidate(prop)
             s arriter = PropertySchema.type.iterator()
 			while arriter.%GetNext(,.arrPropType) {
-				s:..KeepSource %fjscode($i(%fjscode))=" ;property "_prop_" and it's "_arrPropType_" validation"
+				$$$CWriteLine(" ;property "_prop_" and it's "_arrPropType_" validation",..KeepSource)
 				i arrPropType="object" {
                 	d $method(,$$$CurrentMethod, PropertySchema)
             	}
@@ -96,12 +98,12 @@ Method MultiTypePropValidate(prop) [ Private ]
 	s (c,dt)=""
 	s iter = ..PropertySchema.type.iterator()
 	while iter.%GetNext(,.val) {s c=c_..CodeType(val),dt=dt_val_","}
-	set %fjscode($i(%fjscode))=$$$FormatText(" i '$find(%1,%JSON.%GetTypeCodeOf(""%2"")) q ""%3 datatype is should be %4""", c, prop, prop, $replace($e(dt,1,*-1),","," or "))
+	$$$WriteLine($$$FormatText(" i '$find(%1,%JSON.%GetTypeCodeOf(""%2"")) q $$Error^%apiOBJ(5001,""%3 datatype is should be %4"")", c, prop, prop, $replace($e(dt,1,*-1),","," or ")))
 }
 
 Method singleArr() [ Private ]
 {
-	s %fjscode($i(%fjscode))=" i '$iso(%JSON)||('%JSON.%IsA(""%DynamicArray"")) q ""given input is not array"""
+	$$$WriteLine(" i '$iso(%JSON)||('%JSON.%IsA(""%DynamicArray"")) q $$Error^%apiOBJ(5001,""given input is not array"")")
 	d ..GenerateLengthCode()
 	s PropertySchema=..PropertySchema
 	s type =PropertySchema.items.type
@@ -116,19 +118,20 @@ Method CheckRequiredProps(pSchemaObj) [ Private ]
 	s schema = $s(pSchemaObj'="": pSchemaObj, 1: ..Schema)
 	ret:'schema.%IsDefined("required")
 	s iter = schema.required.iterator()
-	s:..KeepSource %fjscode($i(%fjscode))=" ;validate the required schema propery is are available"
-	s %fjscode($i(%fjscode))=" s missing="""""
+	$$$CWriteLine(" ;validate the required schema propery is are available",..KeepSource)
+	$$$WriteLine(" s missing=""""")
 	while iter.%GetNext(,.val) {
-		s %fjscode($i(%fjscode))=" s:'%JSON.%IsDefined("""_val_""") missing=missing_"""_val_","""
+		$$$WriteLine(" s:'%JSON.%IsDefined("""_val_""") missing=missing_"""_val_",""")
 	}
-	s %fjscode($i(%fjscode))=" q:missing'="""" ""Required properties missing: ""_$e(missing,1,*-1)_"""" "
+	$$$WriteLine(" q:missing'="""" $$Error^%apiOBJ(5001,""Required properties missing: ""_$e(missing,1,*-1))")
 	q
 }
 
-Method string(prop As %String = "", SkipGenerate = 0) [ Private ]
+Method string(prop As %String = "", SkipGenerate = 0)
 {
-	s:'SkipGenerate %fjscode($i(%fjscode))=" i %JSON.%GetTypeCodeOf("""_$S(prop["%Get(":+$P(prop,"%Get(",2),1:prop)_""")'=6 q """_prop_" must be a string type"""
-	d ..GenerateLengthCode(prop,"string")
+	$$$CWriteLine(" ;string method validation for "_prop,..KeepSource)
+	$$$CWriteLine(" i %JSON.%GetTypeCodeOf("""_$S(prop["%Get(":+$P(prop,"%Get(",2),1:prop)_""")'=6 q $$Error^%apiOBJ(5001,"""_$S(prop["%Get(":"",1:prop)_" must be a string type"")",'SkipGenerate)
+	d ..GenerateLengthCode(prop, $$$CurrentMethod)
 	d ..GeneratePatternCode(prop)
 	d ..GenerateEnumCode(prop)
 	d ..GenerateFormatCode(prop)
@@ -137,25 +140,26 @@ Method string(prop As %String = "", SkipGenerate = 0) [ Private ]
 }
 
 /// TODO: additional checks for number
-Method number(prop As %String, SkipGenerate = 0) [ Private ]
+Method number(prop As %String, SkipGenerate = 0)
 {
 	d ..integer(prop, SkipGenerate)
 }
 
-Method integer(prop As %String, SkipGenerate = 0) [ Private ]
+Method integer(prop As %String, SkipGenerate = 0)
 {
-	s:'SkipGenerate %fjscode($i(%fjscode))=" i %JSON.%GetTypeCodeOf("""_$S(prop["%Get(":+$P(prop,"%Get(",2),1:prop)_""")'=9 q """_prop_" datatype not match with the json value"""
-	d ..GenerateLengthCode(prop,"integer")
+	$$$CWriteLine(" ;integer method validation for "_prop,..KeepSource)
+	$$$CWriteLine(" i %JSON.%GetTypeCodeOf("""_$S(prop["%Get(":+$P(prop,"%Get(",2),1:prop)_""")'=9 q $$Error^%apiOBJ(5001,"""_$S(prop["%Get(":"",1:prop)_" datatype not match with the json value"")",'SkipGenerate)
+	d ..GenerateLengthCode(prop, $$$CurrentMethod)
 	d ..GenerateEnumCode(prop)
 	d ..GenerateConstCode(prop)
 	d ..GenerateMultipleOfCode(prop)
 }
 
-Method boolean(prop As %String, SkipGenerate = 0) [ Private ]
+Method boolean(prop As %String, SkipGenerate = 0)
 {
 	i 'SkipGenerate{
-		s %fjscode($i(%fjscode))=" i %JSON.%GetTypeCodeOf("""_prop_""")'=4 q """_prop_" datatype not match with the json value"""
-		s %fjscode($i(%fjscode))=" s bv=%JSON."_prop_" if $c(0,1)'[$c(bv) q "" "_prop_" is not boolean value"""
+		$$$WriteLine(" i %JSON.%GetTypeCodeOf("""_prop_""")'=4 q $$Error^%apiOBJ(5001,"""_prop_" datatype not match with the json value"")")
+		$$$WriteLine(" s bv=%JSON."_prop_" if $c(0,1)'[$c(bv) q $$Error^%apiOBJ(5001,"""_prop_" is not boolean value"")")
 	}
 	d ..GenerateConstCode(prop)
 	d ..GenerateEnumCode(prop)
@@ -163,20 +167,20 @@ Method boolean(prop As %String, SkipGenerate = 0) [ Private ]
 	d ..GenerateIFThenElseCode()
 }
 
-Method null(prop As %String, SkipGenerate = 0) [ Private ]
+Method null(prop As %String, SkipGenerate = 0)
 {
 	s PropertySchema=..PropertySchema
-	s:'SkipGenerate %fjscode($i(%fjscode))=" i %JSON.%GetTypeCodeOf("""_prop_""")'=2 q """_prop_" datatype not match with the json value"""
+	$$$CWriteLine(" i %JSON.%GetTypeCodeOf("""_prop_""")'=2 q """_$S(prop["%Get(":"",1:prop)_" datatype not match with the json value""",'SkipGenerate)
 	d ..GenerateEnumCode(prop)
 	d ..GenerateConstCode(prop)
 }
 
-Method array(prop As %String, SkipGenerate = 0) [ Private ]
+Method array(prop As %String, SkipGenerate = 0)
 {
 }
 
 /// Proeprty max,min and additional length checks
-/// type - is mainly used for multi types e.g "type":["string","integer"] 
+/// type - is mainly used for multi types e.g "type":["string","integer"]
 Method GenerateLengthCode(prop As %String = "", type As %String = "")
 {
     s (min,amx,lenExpr)=""
@@ -212,8 +216,15 @@ Method GenerateLengthCode(prop As %String = "", type As %String = "")
     else {
         q
     }
-    i (min'="")!(max'="") {
-        Set %fjscode($I(%fjscode)) = $$$FormatText(" i '$IsValidnum(%1,,%2,%3) q ""%4 length out of range""", lenExpr, +min, max, prop)
+    s:prop["%Get" prop=""
+    i (min'=""),(max'="") {
+        $$$WriteLine($$$FormatText(" i '$IsValidnum(%1,,%2,%3) q $$Error^%apiOBJ(5001,""%4Invalid length: value must be between %5 to %6"")", lenExpr, +min, max, prop, +min, max))
+    }
+    elseif min'=""&&(max=""){
+        $$$WriteLine($$$FormatText(" i '$IsValidnum(%1,,%2) q $$Error^%apiOBJ(5001,""%3Invalid length: value must be greater than or equal to %4"")", lenExpr, +min, prop, +min))
+    }
+    elseif min=""&&(max'=""){
+       $$$WriteLine($$$FormatText(" i '$IsValidnum(%1,,0,%2) q $$Error^%apiOBJ(5001,""%3Invalid length: value must be less than or equal to %4"")", lenExpr, max, prop, max))
     }
 }
 
@@ -221,48 +232,54 @@ Method GenerateuniqueItemsCode(prop As %String = "", type As %String = "")
 {
 	q:'..Schema.uniqueItems
 	s %uniquecheck=1
-	s:..KeepSource %fjscode($i(%fjscode))=" ;validate uniqueItems check"
-	s %fjscode($i(%fjscode)) = " i '$$unqiueItemsCheck() return """""
+	$$$CWriteLine(" ;validate uniqueItems check",..KeepSource)
+	$$$WriteLine(" s st=$$unqiueItemsCheck(%JSON) i 'st return st")
 	q
 }
 
-Method UniqueCheck()
+Method UniqueCheck() [ Internal ]
 {
-	s %fjscode($i(%fjscode))="unqiueItemsCheck(){"
-	s %fjscode($i(%fjscode))="}"
+	$$$WriteLine("unqiueItemsCheck(%JSON){")
+	$$$WriteLine(" s iter=%JSON.%GetIterator()")
+	$$$WriteLine(" while iter.%GetNext(,.val) {")
+	$$$WriteLine("	i $d(uniqueCheck(val)) ret ""Each value must be unique. Duplicate found for ""_val")
+	$$$WriteLine("	s uniqueCheck(val)=""""")
+	$$$WriteLine(" }")
+	$$$WriteLine(" q 1")
+	$$$WriteLine("}")
 }
 
 Method GenerateEnumCode(prop As %String = "") [ Internal ]
 {
 	s PropertySchema = ..PropertySchema
 	q:'PropertySchema.%IsDefined("enum")
-	s:..KeepSource %fjscode($i(%fjscode))=" ; enum check"
+	$$$CWriteLine(" ; enum check",..KeepSource)
 	s iter = PropertySchema.enum.%GetIterator()
 	s c="$lb(" while iter.%GetNext(,.v) {s c=c_$case($isvalidnum(v),1:v,:""""_v_"""")_","} s c=$E(c,1,*-1)_")"
 	i prop'="",(prop'["%Get") {
-		s %fjscode($i(%fjscode))=" i '$lf("_c_",%JSON."_prop_") q ""enum not match with "_prop_" json data"" "
+		$$$WriteLine(" i '$lf("_c_",%JSON."_prop_") q $$Error^%apiOBJ(5001,""enum not match with "_prop_" json data"")")
 	}
 	else{
-		s %fjscode($i(%fjscode))=" i %JSON.%IsA(""%DynamicArray"") s enumsval="_c_" s iter=%JSON.%GetIterator() while iter.%GetNext(,.v){ i '$lf(enumsval,v) ret ""input not match with the schema enum values"" }"
+		$$$WriteLine(" i %JSON.%IsA(""%DynamicArray"") s enumsval="_c_" s iter=%JSON.%GetIterator() while iter.%GetNext(,.v){ i '$lf(enumsval,v) ret ""input not match with the schema enum values"" }")
 	}
 }
 
-Method GeneratePatternCode(prop As %String = "") [ Internal ]
+Method GeneratePatternCode(prop As %String = "")
 {
 	s PropertySchema = ..PropertySchema
 	q:'PropertySchema.%IsDefined("pattern")
 	s pat = PropertySchema.pattern
-	s:..KeepSource %fjscode($i(%fjscode))=" ; pattern check"
-	s %fjscode($i(%fjscode))=$$$FormatText(" i '$match(%JSON.%1,""%2"") q ""pattern not match with %3 json data""", prop, pat, prop)
+	$$$CWriteLine(" ; pattern check",..KeepSource)
+	$$$WriteLine($$$FormatText(" i '$match(%JSON.%1,""%2"") q $$Error^%apiOBJ(5001,""pattern not match with %3 json data"")", prop, pat, prop))
 }
 
-Method GenerateFormatCode(prop As %String) [ Internal ]
+Method GenerateFormatCode(prop As %String)
 {
 	q:'..PropertySchema.%IsDefined("format")
 	s format = ..PropertySchema.format
-	s:..KeepSource %fjscode($i(%fjscode))=" ; "_format_" format check"
+	$$$CWriteLine(" ; "_format_" format check",..KeepSource)
 	s regex = ..RegexFormats(format)
-	s:regex'="" %fjscode($i(%fjscode))=" i '$match(%JSON."_prop_","""_regex_""") q """_format_" format not matched"" "
+	$$$CWriteLine(" i '$match(%JSON."_prop_","""_regex_""") q $$Error^%apiOBJ(5001,"""_format_" format not matched"")",(regex'=""))
 }
 
 // TODO: implement multipleOf
@@ -286,7 +303,7 @@ Method GenerateConstCode(prop)
 	else {
 		s mustbe=const
 	}
-	s %fjscode($i(%fjscode))=$$$FormatText(" i %JSON.%1'=""%2"" q ""%3 value must be %4""", prop, const, prop, mustbe)
+	$$$WriteLine($$$FormatText(" i %JSON.%1'=""%2"" q $$Error^%apiOBJ(5001,""%3 value must be %4"")", prop, const, prop, mustbe))
 }
 
 /// TODO:
@@ -307,12 +324,12 @@ Method GenerateIFThenElseCode()
 	*/
 }
 
-Method CodeType(datatype) [ CodeMode = expression ]
+Method CodeType(datatype) [ CodeMode = expression, Internal ]
 {
 $case(datatype,"string":6,"integer":9,"number":9,"boolean":4,"null":2,:"")
 }
 
-ClassMethod RegexFormats(format) As %String [ CodeMode = expression ]
+ClassMethod RegexFormats(format) As %String [ CodeMode = expression, Internal ]
 {
 $case(format,
 "email":"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$",
@@ -339,25 +356,31 @@ Method GeneateContentMediaTypeCode(PropertySchema As %DynamicObject, prop As %St
 
 Method configfunc() [ Internal, Private ]
 {
-	s %fjscode($i(%fjscode))="%validate(%JSON)"
-	s %fjscode($i(%fjscode))=" n (%JSON)"
-	s %fjscode($i(%fjscode))=" s $et=""q $ze"""
-	s %fjscode($i(%fjscode))=" s:'$iso(%JSON) %JSON={}.%FromJSON(%JSON)"
+	$$$WriteLine("%validate(%JSON)")
+	$$$WriteLine(" n (%JSON)")
+	$$$WriteLine(" s $et=""q $ze""")
+	$$$WriteLine(" s:'$iso(%JSON) %JSON={}.%FromJSON(%JSON)")
+}
+
+ClassMethod %INCLUDE(pCode As %String)
+{
+	#define CWriteLine(%code,%s)	s:%s %fjscode($i(%fjscode))=%code
+	#define WriteLine(%code)	s %fjscode($i(%fjscode))=%code
 }
 
 Method basicinfo() [ Internal, Private ]
 {
 	q:'..KeepSource
-	s %fjscode($i(%fjscode))=" ;Generated by "_$classname()
-	s %fjscode($i(%fjscode))=" ;$schema: "_..Schema."$schema"
-	s %fjscode($i(%fjscode))=" ;$id: "_..Schema."$id"
-	s %fjscode($i(%fjscode))=" ;title: "_..Schema.title
-	s %fjscode($i(%fjscode))=" ;description: "_..Schema.description
+	$$$WriteLine(" ;Generated by "_$classname())
+	$$$WriteLine(" ;$schema: "_..Schema."$schema")
+	$$$WriteLine(" ;$id: "_..Schema."$id")
+	$$$WriteLine(" ;title: "_..Schema.title)
+	$$$WriteLine(" ;description: "_..Schema.description)
 }
 
-Method Savefjs()
+Method Savefjs() [ Internal, Private ]
 {
-	s %fjscode($i(%fjscode))=" q 1"
+	$$$WriteLine(" q 1")
 	d:%uniquecheck ..UniqueCheck()
 	i ..KeepSource {
 		s rot="fjsschema."_..Name_".int"
@@ -370,8 +393,7 @@ Method Savefjs()
 	}
 	else {
 		s %fjscode(0)=%fjscode
-		
-		s rtn=$COMPILE(%fjscode,0,errs,,,,"aaschema."_..Name)
+		s rtn=$COMPILE(%fjscode,0,errs,,,,"fjsschema."_..Name)
     	i rtn=0 {w "compilation successfull",! s rtn=1}
     	else {w "compilation failred return code: ",rtn,! zw errs s rtn=0}
 	}
@@ -384,6 +406,16 @@ Method %OnNew(pSchemaName As %String, pSchema As %DynamicAbstractObject, pKeepSo
 	s ..Schema = pSchema
 	s ..KeepSource = pKeepSource
 	q 1
+}
+
+/// This callback method is invoked by the <METHOD>Compile</METHOD>
+ClassMethod OnBeforeCompile()
+{
+}
+
+/// This callback method is invoked by the <METHOD>Compile</METHOD>
+ClassMethod OnAfterCompile()
+{
 }
 
 }

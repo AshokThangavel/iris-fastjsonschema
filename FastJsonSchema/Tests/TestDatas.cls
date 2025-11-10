@@ -392,6 +392,19 @@ ClassMethod SampleSchema5()
 	}
 }
 
+ClassMethod SampleSchemaData5(case)
+{
+	/// true case
+	if case {
+		s arr=["user1@example.com","user2@example.com","user3@example.com","user4@example.com"]
+	}
+	else {
+		/// failed
+		s arr=["user1@example.com","user2@example.com","user3@example.com","user4@example.com","user4@example.com"]
+	}
+	return arr
+}
+
 ClassMethod SampleSchema6()
 {
 
