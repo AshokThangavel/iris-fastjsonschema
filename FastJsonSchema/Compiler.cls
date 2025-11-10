@@ -60,7 +60,7 @@ Method GenerateCode(pSchemaObj As %DynamicAbstractObject = "") [ Private ]
     while iter.%GetNext(.prop, .PropertySchema) {
 	    Set ..PropertySchema = PropertySchema
         $$$CWriteLine(" ;validate "_prop_" schema propery",..KeepSource)
-        $$$CWriteLine(" ;description given in schema: "_PropertySchema.description_" ",..KeepSource&&(PropertySchema.%IsDefined("description")))
+        $$$CWriteLine(" ;description given in schema: "_PropertySchema.description,..KeepSource)
         s type=PropertySchema.type
         i isarrexecute s prop="%Get("_prop_")"
         i $iso(type){ ;array of types
@@ -124,7 +124,6 @@ Method CheckRequiredProps(pSchemaObj) [ Private ]
 		$$$WriteLine(" s:'%JSON.%IsDefined("""_val_""") missing=missing_"""_val_",""")
 	}
 	$$$WriteLine(" q:missing'="""" $$Error^%apiOBJ(5001,""Required properties missing: ""_$e(missing,1,*-1))")
-	q
 }
 
 Method string(prop As %String = "", SkipGenerate = 0)
@@ -329,6 +328,12 @@ Method CodeType(datatype) [ CodeMode = expression, Internal ]
 $case(datatype,"string":6,"integer":9,"number":9,"boolean":4,"null":2,:"")
 }
 
+ClassMethod %INCLUDE(pCode As %String)
+{
+	#define CWriteLine(%code,%s)	s:%s %fjscode($i(%fjscode))=%code
+	#define WriteLine(%code)	s %fjscode($i(%fjscode))=%code
+}
+
 ClassMethod RegexFormats(format) As %String [ CodeMode = expression, Internal ]
 {
 $case(format,
@@ -362,12 +367,6 @@ Method configfunc() [ Internal, Private ]
 	$$$WriteLine(" s:'$iso(%JSON) %JSON={}.%FromJSON(%JSON)")
 }
 
-ClassMethod %INCLUDE(pCode As %String)
-{
-	#define CWriteLine(%code,%s)	s:%s %fjscode($i(%fjscode))=%code
-	#define WriteLine(%code)	s %fjscode($i(%fjscode))=%code
-}
-
 Method basicinfo() [ Internal, Private ]
 {
 	q:'..KeepSource
@@ -394,13 +393,13 @@ Method Savefjs() [ Internal, Private ]
 	else {
 		s %fjscode(0)=%fjscode
 		s rtn=$COMPILE(%fjscode,0,errs,,,,"fjsschema."_..Name)
-    	i rtn=0 {w "compilation successfull",! s rtn=1}
-    	else {w "compilation failred return code: ",rtn,! zw errs s rtn=0}
+    	i rtn=0 {w "Schema """_..Name_""" compiled successfully",! s rtn=1}
+    	else {w "Schema compilation failred return code: ",rtn,! zw errs s rtn=0}
 	}
 	ret rtn
 }
 
-Method %OnNew(pSchemaName As %String, pSchema As %DynamicAbstractObject, pKeepSource As %Boolean) As %Status
+Method %OnNew(pSchemaName As %String, pSchema As %DynamicAbstractObject, pKeepSource As %Boolean = 0) As %Status
 {
 	s ..Name = pSchemaName
 	s ..Schema = pSchema
