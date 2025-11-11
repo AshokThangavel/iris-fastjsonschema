@@ -5,7 +5,6 @@ A list of pending tasks and planned improvements for this project.
 - [ ] Complete implementation of `IfThenElse`
 - [ ] Implement logic for `oneOf`
 - [ ] Implement logic for `contentMediaType`
-- [ ] Implement logic for `MultipleOf`
 - [ ] Implement logic for `contentMediaTypeCode`
 - [ ] Implement logic for `contentEncoding`
 - [ ] Implement logic for integer `multipleOf`
