@@ -11,68 +11,59 @@ ClassMethod SampleSchema1()
   "description": "A complex schema designed to test compilation of all major validation keywords.",
   "type": "object",
 
-  // --- Object Keywords ---
   "required": ["username", "userID"],
   "minProperties": 3,
   "maxProperties": 6,
   "additionalProperties": false,
 
   "properties": {
-
-    // --- String Keywords ---
     "username": {
       "type": "string",
       "minLength": 3,
       "maxLength": 30,
-      "pattern": "^[a-zA-Z0-9]+$", // Regex: Alphanumeric only
+      "pattern": "^[a-zA-Z0-9]+$",
       "description": "Unique identifier, must be 3-30 alphanumeric characters.",
-      "enum": [
-				"Alice",
-				"Bob",
-				"Charlie",
-				null
-			]
-    },"numberProp": {
-			"type": "number",
-			"minimum": 0.5,
-			"maximum": 100.5,
-			"exclusiveMinimum": 0,
-			"exclusiveMaximum": 101,
-			"multipleOf": 0.5,
-			"description": "test number"
-		},
-    "email": {
-      "type": "string",
-      "format": "email" // Semantic validation (should compile to a specific function call)
-    },
-    "api_key": {
-        "type": "string",
-        "const": "STATIC_KEY_XYZ" // Value must be this exact string
+      "enum": ["Alice", "Bob", "Charlie"]
     },
 
-    // --- Number/Integer Keywords ---
+    "numberProp": {
+      "type": "number",
+      "minimum": 0.5,
+      "maximum": 100.5,
+      "exclusiveMinimum": 0,
+      "exclusiveMaximum": 101,
+      "multipleOf": 0.5,
+      "description": "Test number field."
+    },
+
+    "email": {
+      "type": "string",
+      "format": "email"
+    },
+
+    "api_key": {
+      "type": "string",
+      "const": "STATIC_KEY_XYZ"
+    },
+
     "userID": {
       "type": "integer",
       "minimum": 1000,
-      "exclusiveMaximum": 999999, // Must be strictly less than 999999
+      "exclusiveMaximum": 999999,
       "multipleOf": 5
     },
 
-    // --- Array Keywords ---
     "roles": {
       "type": "array",
-      "items": { "type": "string" }, // All items must be strings
+      "items": {
+        "type": "string",
+        "enum": ["admin", "editor", "viewer"]
+      },
       "minItems": 1,
       "maxItems": 5,
-      "uniqueItems": true, // Array values must not have duplicates
-      "enum": [
-        "admin",
-        "editor",
-        "viewer"
-      ]
+      "uniqueItems": true
     },
 
-    // --- Nested Object ---
     "settings": {
       "type": "object",
       "properties": {
@@ -81,33 +72,28 @@ ClassMethod SampleSchema1()
       },
       "required": ["notifications"],
       "additionalProperties": false
-    },
-
-    // --- Schema Composition (Complex Logic) ---
-    "accountStatus": {
-        "oneOf": [ // Must match EXACTLY ONE of the subschemas
-            { "type": "string", "const": "Active" },
-            { "type": "string", "const": "Suspended" }
-        ]
     }
-  },
-
-  // --- Conditional Keywords ---
-  "dependentRequired": {
-    "email": ["accountStatus"] // If 'email' is present, 'accountStatus' is required
-  }
- }
-
-	/*{
-    "type": "object",
-    "properties": {
-        "name": {"type": "string", "minLength": 1},
-        "age": {"type": "integer", "minimum": 18}
-    },
-    "required": ["name", "age"],
-    "additionalProperties": false
-	}*/
+   }
+	}
 	Return pSchema
+}
+
+ClassMethod SampleSchemaData1()
+{
+	return {
+  "username": "Alice",
+  "userID": 1005,
+  "numberProp": 50.5,
+  "email": "alice@example.com",
+  "api_key": "STATIC_KEY_XYZ",
+  "roles": ["admin", "editor"],
+  "settings": {
+    "notifications": true,
+    "theme": "dark"
+  },
+  "accountStatus": "Active",
+  "accountFindings": "Active"
+ }
 }
 
 ClassMethod SampleSchema2()
@@ -183,17 +169,18 @@ ClassMethod SampleSchema2()
 				"type": "string",
 				"minLength": 1
 			}
-		},"notes": {
-      "description": "Optional user notes.",
-      "type": ["string", "null","integer"]
-      // Using "type": ["string", "null"] is equivalent to:
-      /*
-      "oneOf": [
-        { "type": "string" },
-        { "type": "null" }
-      ]
-      */
-    }
+		},
+		"notes": {
+      		"description": "Optional user notes.",
+      		"type": ["string", "null","integer"]
+							// Using "type": ["string", "null"] is equivalent to:
+							/*
+							"oneOf": [
+								{ "type": "string" },
+								{ "type": "null" }
+							]
+							*/
+    	}
     ,"fileData": {
       "type": "string",
       "contentEncoding": "base64",
@@ -238,7 +225,7 @@ ClassMethod SampleSchema2()
 ClassMethod SampleSchema3()
 {
 
-	ret {
+ ret {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
@@ -568,7 +555,17 @@ ClassMethod SampleSchema8()
 			"format": "email",
 			"enum": [
 				"user1@example.com",
-				"user2@example.com"
+				"user2@example.com",
+				"user3@example.com",
+				"user4@example.com",
+				"user5@example.com",
+				"user6@example.com",
+				"user7@example.com",
+				"user8@example.com",
+				"user9@example.com",
+				"user10@example.com",
+				"user11@example.com",
+				"user12@example.com"
 			],
 			"const": "user1@example.com",
 			"contentEncoding": "base64",
@@ -712,6 +709,419 @@ ClassMethod SampleSchema8()
 		"myArray",
 		"myArray1"
 	]
+	}
+}
+
+ClassMethod SampleSchema9()
+{
+
+	ret {
+  "type": "object",
+  "properties": {
+    "id": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "integer" }
+      ]
+    }
+  },
+  "required": ["id"]
+	}
+}
+
+ClassMethod SampleSchemaData9(type)
+{
+	if type="string" {
+		s rtn = { "id": "abc123" }
+	}
+	else {
+		s rtn = { "id": 1212 }
+	}
+	return rtn
+}
+
+ClassMethod SampleSchema10()
+{
+	ret {
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"$id": "https://example.com/ComplexValidatorTest.schema.json",
+	"title": "Full Feature User Profile and Data",
+	"description": "A complex schema designed to test compilation of advanced validation keywords including combinations and deep recursion.",
+	"type": "object",
+	"required": [
+		"userID",
+		"accountStatus"
+	],
+	"minProperties": 3,
+	"additionalProperties": false,
+	"properties": {
+		"userID": {
+			"type": "integer",
+			"minimum": 1000,
+			"description": "Required integer ID."
+		},
+		"accountStatus": {
+			"description": "Tests simple oneOf aggregation (string const/enum checks).",
+			"oneOf": [
+				{
+					"type": "string",
+					"const": "Active",
+					"pattern": "^[A-Z][a-z]+$"
+				},
+				{
+					"type": "string",
+					"const": "Suspended",
+					"minLength": 9
+				},
+				{
+					"type": "string",
+					"const": "Inprogress",
+					"minLength": 9,
+					"maxLength":40
+				}
+			]
+		}
+	}
+ }
+}
+
+ClassMethod SampleSchemaData10(type, passorfail)
+{
+	ret {"userID": 1500,"accountStatus": "Active"}
+}
+
+ClassMethod SampleSchema11()
+{
+	ret {
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"$id": "https://example.com/ComplexValidatorTest.schema.json",
+	"title": "Full Feature User Profile and Data",
+	"description": "A complex schema designed to test compilation of advanced validation keywords including combinations and deep recursion.",
+	"type": "object",
+	"required": [
+		"userID",
+		"accountStatus",
+		"contactInfo"
+	],
+	"minProperties": 3,
+	"additionalProperties": false,
+	"properties": {
+		"userID": {
+			"type": "integer",
+			"minimum": 1000,
+			"description": "Required integer ID."
+		},
+		"accountStatus": {
+			"description": "Tests simple oneOf aggregation (string const/enum checks).",
+			"oneOf": [
+				{
+					"type": "string",
+					"const": "Active",
+					"pattern": "^[A-Z][a-z]+$"
+				},
+				{
+					"type": "string",
+					"const": "Suspended",
+					"minLength": 9
+				}
+			]
+		},
+		"contactInfo": {
+			"description": "Tests complex/mixed oneOf, requiring recursive generation for the object case.",
+			"oneOf": [
+				{
+					"type": "string",
+					"format": "email"
+				},
+				{
+					"type": "object",
+					"properties": {
+						"phone": {
+							"type": "string",
+							"pattern": "^\\d{10}$"
+						},
+						"verified": {
+							"type": "boolean"
+						}
+					},
+					"required": [
+						"phone"
+					]
+				}
+			]
+		},
+		"permissions": {
+			"description": "Tests allOf: must satisfy all contained schemas.",
+			"allOf": [
+				{
+					"type": "array"
+				},
+				{
+					"items": {
+						"type": "string",
+						"enum": [
+							"read",
+							"write",
+							"admin"
+						]
+					}
+				}
+			]
+		},
+		"dataValue": {
+			"description": "Tests multi-type property (array of types). Must be string OR integer.",
+			"type": [
+				"string",
+				"integer"
+			],
+			"minimum": 0,
+			"maxLength": 50
+		},
+		"settingsArray": {
+			"description": "Tests an array whose items are objects and requires recursion on array items.",
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"key": {
+						"type": "string"
+					},
+					"value": {
+						"type": "string"
+					}
+				},
+				"required": [
+					"key"
+				]
+			}
+		}
+	}
+ }
+}
+
+ClassMethod SampleSchemaData11()
+{
+	return {
+  "userID": 1500,
+  "accountStatus": "Active",
+  "contactInfo": {
+    "phone": "1234567890",
+    "verified": true
+  },
+  "permissions": ["read", "write"],
+  "dataValue": "example string",
+  "settingsArray": [
+    {
+      "key": "theme",
+      "value": "dark"
+    },
+    {
+      "key": "notifications",
+      "value": "enabled"
+    }
+  ]
+ }
+}
+
+ClassMethod SampleSchema12()
+{
+
+	Set pSchema = {
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/FullFeatureUser.schema.json",
+  "title": "Full Feature User Profile",
+  "description": "A complex schema designed to test compilation of all major validation keywords.",
+  "type": "object",
+
+  "required": ["username", "userID"],
+  "minProperties": 3,
+  "maxProperties": 6,
+  "additionalProperties": false,
+
+  "properties": {
+    "username": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 30,
+      "pattern": "^[a-zA-Z0-9]+$",
+      "description": "Unique identifier, must be 3-30 alphanumeric characters.",
+      "enum": ["Alice", "Bob", "Charlie"]
+    },
+
+    "numberProp": {
+      "type": "number",
+      "minimum": 0.5,
+      "maximum": 100.5,
+      "exclusiveMinimum": 0,
+      "exclusiveMaximum": 101,
+      "multipleOf": 0.5,
+      "description": "Test number field."
+    },
+
+    "email": {
+      "type": "string",
+      "format": "email"
+    },
+
+    "api_key": {
+      "type": "string",
+      "const": "STATIC_KEY_XYZ"
+    },
+
+    "userID": {
+      "type": "integer",
+      "minimum": 1000,
+      "exclusiveMaximum": 999999,
+      "multipleOf": 5
+    },
+
+    "roles": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["admin", "editor", "viewer"]
+      },
+      "minItems": 1,
+      "maxItems": 5,
+      "uniqueItems": true
+    },
+
+    "settings": {
+      "type": "object",
+      "properties": {
+        "notifications": { "type": "boolean" },
+        "theme": { "type": "string", "default": "light" }
+      },
+      "required": ["notifications"],
+      "additionalProperties": false
+    },
+
+    "accountStatus": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "Active",
+          "pattern": "^[A-Z][a-z]+$"
+        },
+        {
+          "type": "string",
+          "const": "Suspended",
+          "pattern": "^[A-Z][a-z]+$"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "phone": {
+              "type": "string",
+              "pattern": "^\\d{10}$"
+            },
+            "verified": {
+              "type": "boolean"
+            }
+          },
+          "required": ["phone"]
+        }
+      ]
+    },
+
+    "accountFindings": {
+      "description": "Current operational state of the user account.",
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "Active",
+          "description": "Account is active and in good standing.",
+          "examples": ["Active"]
+        },
+        {
+          "type": "string",
+          "const": "Suspended",
+          "description": "Account temporarily disabled due to an issue.",
+          "examples": ["Suspended due to non-payment"],
+          "pattern": "^[A-Z][a-z]+$"
+        },
+        {
+          "type": "string",
+          "const": "Closed",
+          "description": "Account permanently closed.",
+          "examples": ["Closed"],
+          "pattern": "^[A-Za-z]+$"
+        }
+      ]
+    }
+  },
+
+  "dependentRequired": {
+    "email": ["accountStatus"]
+  }
+ }
+	Return pSchema
+}
+
+// allOf sample
+
+ClassMethod SampleSchema13()
+{
+	ret {
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AllOf Profile Schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer"
+    },
+    "email": {
+      "type": "string",
+      "format": "email"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["active", "suspended"]
+    }
+  },
+  "allOf": [
+    {
+      "description": "Requirement Set 1: Must have a valid ID and be an object.",
+      "type": "object",
+      "properties": {
+        "id": {
+			"type":"integer",
+          "minimum": 1
+        }
+      },
+      "required": ["id"]
+    },
+    {
+      "description": "Requirement Set 2: Must have a status and a specific email pattern.",
+      "type": "object",
+      "properties": {
+        "email": {
+			"type":"string",
+          "maxLength": 100
+        },
+        "status": {"type": "string"}
+      },
+      "required": ["email", "status"]
+    }
+  ]
+ }
+}
+
+ClassMethod SampleSchemaData13(isvalid)
+{
+	if isvalid=1 {
+		return {
+  			"id": 105,             // Meets Set 1 (id >= 1)
+  			"email": "test@app.com", // Meets Set 2 (required, maxLength 100)
+  			"status": "active"       // Meets Set 2 (required)
+		}
+	}
+	else {
+			ret {
+				"email": "test@app.com"
+				// Missing "id" (required by Set 1)
+				// Missing "status" (required by Set 2)
+				}
 	}
 }
 
