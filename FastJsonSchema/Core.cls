@@ -15,8 +15,10 @@ Class FastJsonSchema.Core Extends %RegisteredObject
 /// <EXAMPLE>
 /// Set sc = ##class(FastJsonSchema.Core).Compile(schema,schemaName,keepSoruce)
 /// </EXAMPLE>
-ClassMethod Compile(pSchema As %DynamicObject, pSchemaName As %String = "", KeepSoruce As %Boolean = 0) As %Status
+ClassMethod Compile(pSchema As %DynamicObject = "", pSchemaName As %String = "", KeepSoruce As %Boolean = 0) As %Status
 {
+	d $SYSTEM.Process.Undefined(2)
+
 	Set:'$IsObject(pSchema) pSchema = {}.%FromJSON(pSchema)
 	If '$IsObject(pSchema) {
 		Return $$$ERROR($$$GeneralError, "Invalid JSON schema provided.")
@@ -25,8 +27,8 @@ ClassMethod Compile(pSchema As %DynamicObject, pSchemaName As %String = "", Keep
 		Set pSchemaName = "fjsschema"_$TRanslate($Horolog,",")
 	}
 	Set schemaCls=..IsSchemaImplemented(pSchema."$schema",.schemaCls)
-	If schemaCls'=""{
-		Return $$$ERROR($$$GeneralError, "Unimplemented schema type")
+	If $$$ISERR(schemaCls){
+		Return schemaCls
 	}
 	Set st = $ClassMethod("FastJsonSchema."_schemaCls, pSchemaName, pSchema, KeepSoruce)
 	Return st
@@ -48,7 +50,7 @@ ClassMethod Validate(pSchemaName As %String = "", pJson As %DynamicObject) As %S
 		Return $$$ERROR($$$GeneralError, "Schema name is required for validation.")
 	}
 	If pJson="" {
-		Return $$$ERROR($$$GeneralError, "JSON data is required for validation.")
+		Return $$$ERROR($$$GeneralError, "JSON is required for validation.")
 	}
 	If $IsObject(pJson) {
 		Set pJson = pJson.%ToJSON()
@@ -56,10 +58,16 @@ ClassMethod Validate(pSchemaName As %String = "", pJson As %DynamicObject) As %S
 	Return $Xecute("quit $$%validate^fjsschema."_pSchemaName_"("_pJson_") ")
 }
 
-ClassMethod IsSchemaImplemented(pSchema As %String = "", Output pSchemaClass As %String)
+ClassMethod IsSchemaImplemented(pSchema As %String = "", Output pSchemaClass As %String) As %Boolean
 {
-	#dim schemaDict as %DynamicObject = ..SupportedJSONSchemaList()
-	Return schemaDict.%Get($Piece(pSchema,"/",4))
+    #;Extract the draft version (e.g., "draft-07")
+    Set draftVersion = $Piece(pSchema,"/",4)
+    #dim schemaDict as %DynamicObject = ..SupportedJSONSchemaList()
+    If schemaDict.%IsDefined(draftVersion) {
+        Set pSchemaClass = schemaDict.%Get(draftVersion)
+        Quit $$$OK
+    }
+    Quit $$$ERROR($$$GeneralError, "Unsupported JSON Schema draft: "_draftVersion)
 }
 
 /// include the draft names in the below list.
@@ -68,7 +76,7 @@ ClassMethod IsSchemaImplemented(pSchema As %String = "", Output pSchemaClass As 
 ClassMethod SupportedJSONSchemaList() As %DynamicObject [ CodeMode = expression ]
 {
 {
-	"draft-07": "Compiler"
+"draft-07": "Compiler.Draft7"
 }
 }
 
