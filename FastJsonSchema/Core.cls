@@ -15,7 +15,7 @@ Class FastJsonSchema.Core Extends %RegisteredObject
 /// <EXAMPLE>
 /// Set sc = ##class(FastJsonSchema.Core).Compile(schema,schemaName,keepSoruce)
 /// </EXAMPLE>
-ClassMethod Compile(pSchema As %DynamicObject = "", pSchemaName As %String = "", KeepSoruce As %Boolean = 0) As %Status
+ClassMethod Compile(pSchema As %DynamicObject = "", pSchemaName As %String = "", CompileParameters = "SPEED") As %Status
 {
 	d $SYSTEM.Process.Undefined(2)
 
@@ -24,13 +24,13 @@ ClassMethod Compile(pSchema As %DynamicObject = "", pSchemaName As %String = "",
 		Return $$$ERROR($$$GeneralError, "Invalid JSON schema provided.")
 	}
 	If $Get(pSchemaName)="" {
-		Set pSchemaName = "fjsschema"_$TRanslate($Horolog,",")
+		Set pSchemaName = $TRanslate($Horolog,",")
 	}
-	Set schemaCls=..IsSchemaImplemented(pSchema."$schema",.schemaCls)
-	If $$$ISERR(schemaCls){
-		Return schemaCls
-	}
-	Set st = $ClassMethod("FastJsonSchema."_schemaCls, pSchemaName, pSchema, KeepSoruce)
+	Set st=..IsSchemaImplemented(pSchema."$schema",.schemaCls)
+	If $$$ISERR(st) Return st
+	Set st = ##class(FastJsonSchema.Compiler.Parameters).Create(CompileParameters,.CompileParamsObj)
+	If $$$ISERR(st) Return st
+	Set st = $ClassMethod("FastJsonSchema."_schemaCls,"Compile", pSchemaName, pSchema,CompileParamsObj)
 	Return st
 }
 
