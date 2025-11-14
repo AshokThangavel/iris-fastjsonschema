@@ -1125,4 +1125,220 @@ ClassMethod SampleSchemaData13(isvalid)
 	}
 }
 
+/// additionalProperties test
+ClassMethod SampleSchema14()
+{
+	ret {
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Profile with Strict Additional Data",
+  "type": "object",
+
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Explicitly allowed property"
+    },
+    "age": {
+      "type": "integer",
+      "description": "Explicitly allowed property"
+    }
+  },
+
+  // This is the core control mechanism
+  "additionalProperties": {
+    "type": "integer",
+    "minimum": 0,
+    "description": "All extra properties MUST have an integer value >= 0."
+  }
+ }
+}
+
+ClassMethod SampleSchemaData14()
+{
+	return {"name": "Sue","age": 22,"score": 98,"level": 10}
+}
+
+/// patternProperties
+ClassMethod SampleSchema15()
+{
+	 ret {
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Configuration and Error Validation",
+  "type": "object",
+
+  "properties": {
+    "id": { "type": "string" } // Exclude this from pattern checks
+  },
+
+  "patternProperties": {
+    // 1. Pattern: Any key starting with 'cfg_' (Configuration)
+    "^cfg_": {
+      "description": "Configuration values must be boolean.",
+      "type": "boolean"
+    },
+
+    // 2. Pattern: Any key ending with 'Priority'
+    "Priority$": {
+      "description": "Priority values must be an integer >= 1.",
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+
+  // No other keys are allowed, forcing all data properties to be tested against the patterns.
+  "additionalProperties": false
+ }
+}
+
+ClassMethod SampleSchema16()
+{
+	ret {
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "User Profile Schema",
+  "type": "object",
+
+  "required": ["userId", "username"],
+
+  "properties": {
+    "userId": {
+      "type": "integer",
+      "description": "Unique integer ID for the user.",
+      "minimum": 1000
+    },
+    "username": {
+      "type": "string",
+      "description": "Unique username (must be 3 to 20 characters).",
+      "minLength": 3,
+      "maxLength": 20
+    },
+    "email": {
+      "type": "string",
+      "format": "email",
+      "description": "Optional email address."
+    },
+    "roles": {
+      "type": "array",
+      "description": "List of user roles.",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "uniqueItems": true
+    }
+  },
+
+  "dependencies": {
+    "email": ["usern-ame"] // If 'email' is present, 'username' must also be present (redundant due to 'required', but demonstrates the concept)
+  },
+
+  "additionalProperties": false
+ }
+}
+
+ClassMethod SampleSchemaData16()
+{
+	ret {
+  "userId": 1050,
+  "username": "atlas_dev",
+  "email": "atlas@example.com",
+  "roles": ["admin", "editor"]
+ }
+}
+
+ClassMethod SampleSchema17()
+{
+	ret {
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Conditional Validation Test",
+  "type": "object",
+  "required": ["status_code"],
+
+  "properties": {
+    "status_code": {
+      "type": "integer",
+      "enum": [200, 400, 500],
+      "description": "The condition trigger."
+    },
+    "data_format": { "type": "string", "enum": ["JSON", "XML"] },
+    "error_message": { "type": "string", "minLength": 1 }
+  },
+
+  // This is the IF/THEN/ELSE structure to test
+  "if": {
+    // CONDITION: If status_code is 200 (Success)
+    "properties": {
+      "status_code": {
+		"type": "integer",
+		"const": 200 }
+    }
+  },
+  "then": {
+    // THEN: If 200, it must have a valid 'data_format' and must NOT have 'error_message'
+    "required": ["data_format"],
+    "properties": {
+      "error_message": { "not": {} } // Must not be present
+    }
+  },
+  "else": {
+    // ELSE: If NOT 200 (i.e., 400 or 500), it must have an 'error_message'
+    "required": ["error_message"],
+    "properties": {
+      "data_format": { "not": {} } // Must not be present
+    }
+  },
+
+  "additionalProperties": false
+ }
+}
+
+ClassMethod SampleSchema18()
+{
+	ret {
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Customer Order Schema with Internal $ref",
+  "type": "object",
+  "required": ["customer_id", "shipping_address"],
+  "properties": {
+    "customer_id": {
+      "type": "integer",
+      "description": "Unique customer identifier"
+    },
+
+    "billing_address": {
+		"type":"string",
+      "description": "Optional billing address.",
+      "$ref": "#/definitions/Address" // <--- REFERENCE 1
+    },
+
+    "shipping_address": {
+		"type":"string",
+      "description": "Mandatory shipping address.",
+      "$ref": "#/definitions/Address" // <--- REFERENCE 2
+    }
+  },
+  "definitions": {
+    "Address": { // The target schema for the $ref pointers
+      "type": "object",
+      "required": ["street", "city"], // Required properties in the resolved schema
+      "properties": {
+        "street": { "type": "string", "minLength": 5 },
+        "city": { "type": "string" },
+        "zip_code": { "type": "string", "pattern": "^[0-9]{5}$" }
+      },
+      "additionalProperties": false
+    }
+  }
+ }
+}
+
+ClassMethod SampleSchemaData18(isvalid = 1)
+{
+	i isvalid {
+		s json ={"customer_id": 101, "shipping_address": {"street": "500 Main Street", "city": "Anytown"}, "billing_address": {"street": "P.O. Box 10", "city": "Remote"}}
+	}
+	else {
+		s json ={"customer_id": 102, "shipping_address": {"street": "99 Elm Street"}, "billing_address": {"street": "123 Oak St", "city": "Nowhere"}}
+
+	}
+	ret json
+}
+
 }
