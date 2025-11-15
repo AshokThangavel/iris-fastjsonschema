@@ -3,18 +3,18 @@ Class FastJsonSchema.Compiler.Parameters Extends %RegisteredObject
 
 /// Primary Control: Maps to "DEBUG", "BALANCED", "SPEED" or "CUSTOM".
 /// SPEED - Amins to maximum performance benefits
-Property OptimizationLevel As %String(MAXLEN = 8) [ InitialExpression = "SPEED" ];
+Property OptimizationLevel As %String(MAXLEN = 10) [ InitialExpression = "SPEED" ];
 
-/// TODO: Feature/Speed Toggle: If False, skips code generation for the 'format' keyword.
+///  Feature/Speed Toggle: If False, skips code generation for the 'format' keyword.
 Property UseFormats As %Boolean [ InitialExpression = 1 ];
 
 /// TODO: Feature/Speed Toggle: If False, skips code generation for ContentMediaType/ContentEncoding.
 Property UseContentChecks As %Boolean [ InitialExpression = 0 ];
 
-/// TODO: Behavior Toggle: If False, skips code to insert values from the 'default' keyword.
+/// Behavior Toggle: If False, skips code to insert values from the 'default' keyword.
 Property UseDefaults As %Boolean [ InitialExpression = 0 ];
 
-/// TODO: Debugging vs. Speed: If False, generates minimal error messages without detailed path/context.
+/// Debugging vs. Speed: If False, generates minimal error messages without detailed path/context.
 Property DetailedExceptions As %Boolean [ InitialExpression = 0 ];
 
 /// Debugging Output: If False, suppresses all $$$CWriteLine comments in the generated routine.
@@ -32,12 +32,22 @@ ClassMethod Create(pInput = "SPEED", Output obj As FastJsonSchema.Compiler.Param
 {
 	Set obj= ..%New()
 	Set st = obj.InitializeInternal(pInput)
-	ret st
+	Return st
+}
+
+Method IsSpeedMode() [ CodeMode = expression ]
+{
+..OptimizationLevel="SPEED"
+}
+
+Method IsDebugMode() [ CodeMode = expression ]
+{
+(..OptimizationLevel = "DEBUG")
 }
 
 Method InitializeInternal(pInput) As %Status [ Internal, Private ]
 {
-	If pInput="" S FLAG="SPEED"
+	If pInput="" Set FLAG="SPEED"
     If '$IsObject(pInput) {
         Set FLAG = $Select(pInput'="":$ZConvert(pInput, "U"), 1:"SPEED")
         Set ..OptimizationLevel = FLAG

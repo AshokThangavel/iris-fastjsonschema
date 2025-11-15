@@ -327,7 +327,7 @@ Method GenerateAddPropertiesCode(pContext As %DynamicAbstractObject) [ Private ]
     $$$WriteLine(" while iter.%GetNext(.key, .value) {", FunctionName)
 
     #;Skip if the property is explicitly defined in 'properties'
-    $$$WriteLine("  if knownProps.%IsDefined(key) continue", FunctionName)
+    ;$$$WriteLine("  if knownProps.%IsDefined(key) continue", FunctionName)
 
     #; additionalProperties: false (Strict exclusion)
     i '$iso(apSchema) {
@@ -336,9 +336,10 @@ Method GenerateAddPropertiesCode(pContext As %DynamicAbstractObject) [ Private ]
         s failureCode = ..GetFailureCode(pContext, "additionalProperties")
         s pContext.FailureMode=oldFailureMode
         #;If we reach here, 'key' is NOT in 'properties', and additionalProps is false. Fail validation.
-        $$$WriteLine($$$FormatText("  %1", failureCode), FunctionName)
+        $$$WriteLine($$$FormatText(" if 'knownProps.%IsDefined(key) %1", failureCode), FunctionName)
     }
     elseif apSchema.%IsA("%DynamicAbstractObject") {
+        $$$WriteLine("  if knownProps.%IsDefined(key) continue", FunctionName)
         s subSchemaContext = ..CreateContext( apSchema, DataRef_".%Get(key)","THROW",FunctionName)
         $$$WriteLine("  try {", FunctionName)
         d ..GenerateCode(subSchemaContext)
@@ -646,10 +647,10 @@ Method integer(pContext)
 		}
 		else{
 			i dataRef["%Get" {
-				s generatedCode=$$$FormatText(" i %1.%GetTypeCodeOf(%2) "_failureCode,$p(dataRef,".%Get("),$p($p(dataRef,".%Get(",2),")"))
+				s generatedCode=$$$FormatText(" i %1.%GetTypeCodeOf(""%2"") "_failureCode,$p(dataRef,".%Get("),$p($p(dataRef,".%Get(",2),")"))
 			}
 			else{
-				s generatedCode = $$$FormatText(" i %1.%GetTypeCodeOf(%2)'=9 "_failureCode, $p(dataRef,".",1,*-1),$p(dataRef,".",*))
+				s generatedCode = $$$FormatText(" i %1.%GetTypeCodeOf(""%2"")'=9 "_failureCode, $p(dataRef,".",1,*-1),$p(dataRef,".",*))
 			}
 		}
 		$$$WriteLine(generatedCode,FunctionName)
