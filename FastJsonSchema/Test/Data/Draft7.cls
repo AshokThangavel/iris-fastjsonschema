@@ -1342,4 +1342,34 @@ ClassMethod SampleSchemaData18(isvalid = 1)
 	ret json
 }
 
+ClassMethod SampleSchema19()
+{
+	ret {
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "A string property with a default.",
+      "default": "Anonymous User"
+    },
+    "isAdmin": {
+      "type": "boolean",
+      "description": "A boolean property with a default.",
+      "default": false
+    },
+    "score": {
+      "type": "integer",
+      "description": "An integer property with a default.",
+      "default": 0
+    },
+    "lastLogin": {
+      "type": "string",
+      "format": "date-time",
+      "description": "A property without a default."
+    }
+  	}
+ }
+}
+
 }

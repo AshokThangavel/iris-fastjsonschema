@@ -15,7 +15,7 @@ Class FastJsonSchema.Core Extends %RegisteredObject
 /// <EXAMPLE>
 /// Set sc = ##class(FastJsonSchema.Core).Compile(schema,schemaName,keepSoruce)
 /// </EXAMPLE>
-ClassMethod Compile(pSchema As %DynamicObject = "", pSchemaName As %String = "", CompileParameters = "SPEED") As %Status
+ClassMethod Compile(pSchema As %DynamicObject = "", pSchemaName As %String = "", CompileParameters = "") As %Status
 {
 	Do $SYSTEM.Process.Undefined(2)
 

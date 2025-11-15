@@ -2,6 +2,7 @@ Class FastJsonSchema.Compiler.Parameters Extends %RegisteredObject
 {
 
 /// Primary Control: Maps to "DEBUG", "BALANCED", "SPEED" or "CUSTOM".
+/// SPEED - Amins to maximum performance benefits
 Property OptimizationLevel As %String(MAXLEN = 8) [ InitialExpression = "SPEED" ];
 
 /// TODO: Feature/Speed Toggle: If False, skips code generation for the 'format' keyword.
@@ -58,9 +59,9 @@ Method InitializeInternal(pInput) As %Status [ Internal, Private ]
 Method SPEED()
 {
 	Set ..DetailedExceptions = 0
-	Set ..UseFormats = 0
+	Set ..UseFormats = 1
 	Set ..UseContentChecks = 0
-	Set ..UseDefaults = 1
+	Set ..UseDefaults = 0
 	Set ..GenerateComments = 0
 	Set ..KeepSource = 0
 }

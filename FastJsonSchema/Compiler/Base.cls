@@ -9,7 +9,7 @@ Property ErrorMap As %DynamicObject [ Internal ];
 
 Property CompilerFlags As FastJsonSchema.Compiler.Parameters;
 
-ClassMethod Compile(pSchemaName = "", pSchema As %DynamicObject = "", CompileParamsObj As %Boolean = 0)
+ClassMethod Compile(pSchemaName = "", pSchema As %DynamicObject = "", CompileParamsObj As %Boolean = 0) As %Status
 {
 	d ..OnBeforeCompile()
 	s st=..%New(pSchemaName, CompileParamsObj).CompileToInternal(pSchema)
@@ -110,7 +110,7 @@ Method GenerateCode(pContext As %DynamicAbstractObject = "") [ Private ]
 
             #;Create context for the property's schema
             s contextObj = ..CreateContext(PropertySchema, dataRef, pContext.FailureMode, pContext.TargetFunc)
-            $$$WriteLine(" ;Started generating code for property "_prop_" full json path is "_contextObj.DataRef,contextObj.TargetFunc)
+            $$$CWriteLine(" ;Started generating code for property "_prop_" full json path is "_contextObj.DataRef,contextObj.TargetFunc)
             d ..GenerateCode(contextObj)
         }
         q
@@ -136,7 +136,7 @@ Method GenerateMultiTypeCode(pContext As %DynamicAbstractObject, pIterator As %D
     s DataRef = pContext.DataRef
     s FunctionName = pContext.TargetFunc
     s SuccessVar = "multitypesuccess"
-    $$$WriteLine(" ; Multi-type validation check (OR logic)", FunctionName)
+    $$$CWriteLine(" ; Multi-type validation check (OR logic)", FunctionName)
     $$$WriteLine(" s "_SuccessVar_" = 0", FunctionName)
 
     #; Loop through each allowed type in the schema.type array
@@ -157,15 +157,12 @@ Method GenerateMultiTypeCode(pContext As %DynamicAbstractObject, pIterator As %D
         #;If the type check and its constraints pass (no error thrown), set the success flag
         $$$WriteLine(" s "_SuccessVar_" = 1", FunctionName)
 
-        $$$WriteLine(" } catch {", FunctionName)
-        #;If an error is thrown (constraint failed), clear it and continue to the next type
-        $$$WriteLine("  s $ZERROR = """" ; Clear error status to continue to next type check", FunctionName)
-        $$$WriteLine(" }", FunctionName)
+        $$$WriteLine(" } catch { }", FunctionName)
         $$$WriteLine(" }", FunctionName) // End of 'i !SuccessVar' block
     }
 
     #;Final Check: If the loop finishes without success, throw the overall error.
-    $$$WriteLine(" ; Final check: Did the data match any type?", FunctionName)
+    $$$CWriteLine(" ; Final check: Did the data match any type?", FunctionName)
     s failureCode = ..GetFailureCode(pContext,"datatype")
     $$$WriteLine(" i '"_SuccessVar_" "_failureCode, FunctionName)
 }
@@ -617,12 +614,13 @@ Method string(pContext)
 		}
 		$$$WriteLine(generatedCode, FunctionName)
 	}
+	d ..GeneratePropertyDefaultCode(pContext)
 	d ..GenerateLenCode(pContext)
 	d ..GeneratePatternCode(pContext)
 	d ..GenerateEnumCode(pContext)
 	d ..GenerateFormatCode(pContext)
 	d ..GenerateConstCode(pContext)
-	d ..GeneateContentMediaTypeCode(pContext)
+	d ..GenerateContentChecksCode(pContext)
 }
 
 /// TODO: additional checks for number
@@ -685,8 +683,9 @@ Method boolean(pContext)
 			}
 		}
 		$$$WriteLine(generatedCode,FunctionName)
-		$$$WriteLine($$$FormatText(" i $c(0,1)[$c(%1) %2",dataRef,error),FunctionName)
+		$$$WriteLine($$$FormatText(" i $c(0,1)[$c(%1) %2",dataRef,failureCode),FunctionName)
 	}
+	d ..GeneratePropertyDefaultCode(pContext)
 	d ..GenerateConstCode(pContext)
 	d ..GenerateEnumCode(pContext)
 	d ..GenerateIfThenElseCode(pContext)
@@ -711,6 +710,7 @@ Method null(pContext)
 		}
 		$$$WriteLine(generatedCode,FunctionName)
 	}
+	d ..GeneratePropertyDefaultCode(pContext)
 	d ..GenerateEnumCode(pContext)
 	d ..GenerateConstCode(pContext)
 }
@@ -742,7 +742,13 @@ Method GetFailureCode(pContext As %DynamicAbstractObject, constraintType As %Str
         s rtn = "throw"
     }
     elseif (pMode = "ret") || (pMode = "q") {
-        s rtn = $$$FormatText(pMode_" $$Error^%apiOBJ(5001,""%1"")", errorMsg)
+	    if ..CompilerFlags.DetailedExceptions {
+		    s rtn = $$$FormatText(pMode_" $$Error^%apiOBJ(5001,""%1"")", errorMsg)
+	    }
+	    else {
+		     s rtn = $$$FormatText(pMode_" ""%1""", errorMsg)
+	    }
+        
     }
     q rtn
 }
@@ -775,6 +781,7 @@ ClassMethod GetErrorMap() As %DynamicObject
     d map.%Set("pattern", "% failed pattern validation")
     d map.%Set("format", "% must match with the format")
     d map.%Set("enum", "Invalid value of property %. Value must match one of the allowed enum items.")
+    d map.%Set("ContentMediaTypeFail","")
 
     #; number constraints
     d map.%Set("minimum", "% must be greater than or equal to minimum")
@@ -898,17 +905,15 @@ Method GeneratePatternCode(pContext As %DynamicObject)
 Method GenerateFormatCode(pContext)
 {
 	s schema = pContext.Schema
-    q:'schema.%IsDefined("format")
-    s format=schema.format
+	s format=schema.format
+    q:(format="")!('..CompilerFlags.UseFormats)
     s dataRef = pContext.DataRef
     s FunctionName = pContext.TargetFunc
-	$$$CWriteLine(" ; "_format_" format check "_dataRef,FunctionName)
+	$$$CWriteLine(" ;"_format_" format check "_dataRef,FunctionName)
 	s regex = ..RegexFormats(format)
 	s error = ..GetFailureCode(pContext, "format")
 	$$$WriteLine($$$FormatText(" i '$match(%1,""%2"") %3",dataRef,regex,error),FunctionName)
 }
-
-// TODO: implement multipleOf
 
 Method GenerateMultipleOfCode(pContext)
 {
@@ -956,11 +961,7 @@ Method GenerateIfThenElseCode(pContext As %DynamicAbstractObject) [ Private ]
 
     #; If the recursive validation completes without error, set the flag to 1 (Success)
     $$$WriteLine("  s "_ IfCheckVar _ " = 1", FunctionName)
-    $$$WriteLine(" } catch {", FunctionName)
-
-    #;If the 'if' validation fails, $ZERROR is set, the flag remains 0. Clear $ZERROR to proceed.
-    $$$WriteLine("  s $ZERROR = """" ; Clear error status so we can continue to the ELSE block", FunctionName)
-    $$$WriteLine(" }", FunctionName)
+    $$$WriteLine(" } catch { }", FunctionName)
 
     #;Generate The 'Then' And 'Else' Branches
 
@@ -996,7 +997,7 @@ $case(datatype,"string":6,"integer":9,"number":9,"boolean":4,"object":18,"array"
 Method WriteCodeToTarget(pCode, pFunctionName = "")
 {
     i pFunctionName="" {
-	    s %fjscode("0fjs",$i(%fjscode)) = pCode
+	    s %fjscode("0fjs",$i(%fjscode("0fjs"))) = pCode
     }
     else {
 	    ; use this for creating support function/procedures
@@ -1008,7 +1009,7 @@ Method WriteCodeToTarget(pCode, pFunctionName = "")
 
 ClassMethod %INCLUDE(pCode As %String)
 {
-	#define CWriteLine(%code,%f)	d:'..CompilerFlags.GenerateComments ..WriteCodeToTarget(%code,%f)
+	#define CWriteLine(%code,%f)	d:..CompilerFlags.GenerateComments ..WriteCodeToTarget(%code,%f)
 	#define WriteLine(%code,%f)		d ..WriteCodeToTarget(%code,%f)
 
 	#define intDT					"integerDT"
@@ -1021,7 +1022,7 @@ ClassMethod %INCLUDE(pCode As %String)
 
 ClassMethod RegexFormats(format) As %String [ CodeMode = expression, Internal ]
 {
-$case(format,
+$case($zcvt(format,"l"),
 "email":"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$",
 "uri":"^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$",
 "date":"^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$",
@@ -1073,16 +1074,81 @@ Method GenerateCombinatorValidation(alloneanyOf As %String, pContext As %Dynamic
     }
 }
 
+/// TODO: implementation pending
+Method GenerateContentChecksCode(pContext As %DynamicObject) [ Private ]
+{
+    s schema = pContext.Schema
+    s dataRef = pContext.DataRef
+    s FunctionName = pContext.TargetFunc
+    q:'pContext.Parameters.UseContentChecks
+    #;
+	i schema.%IsDefined("contentMediaType") {
+		s contentMediaType=schema.contentMediaType
+        $$$CWriteLine(" ;Validating contentMediaType: "_contentMediaType, FunctionName)
+        d ..GeneateContentMediaTypeCode(pContext)
+        s failureCode = ..GetFailureCode(pContext, "ContentMediaTypeFail")
+        $$$CWriteLine(" ;End Validating contentMediaType: "_contentMediaType, FunctionName)
+	}
+    i schema.%IsDefined("contentEncoding") {
+	    s contentEncoding = schema.contentEncoding
+        $$$CWriteLine(" ;Validating contentEncoding: "_contentEncoding, FunctionName)
+        d ..GenerateContentEncodingCode(pContext)
+        $$$CWriteLine(" ;End Validating contentEncoding: "_contentEncoding, FunctionName)
+    }
+}
+
 /// TODO:
 Method GeneateContentMediaTypeCode(pContext) [ Internal, Private ]
 {
-	q:'pContext.Schema.%IsDefined("contentMediaType")
 }
 
 /// TODO:
 Method GenerateContentEncodingCode(pContext) [ Internal, Private ]
 {
-	q:''pContext.Schema.%IsDefined("contentMediaType")
+	s schema = pContext.Schema
+    s dataRef = pContext.DataRef
+    s FunctionName = pContext.TargetFunc
+    s contentEncoding = schema.%Get("contentEncoding")
+    q:contentEncoding=""
+
+    s encoding = $zcvt(contentEncoding, "U")
+    If encoding = "BASE64" {
+    }
+    Else {
+    }
+}
+
+/// INPROGRESS
+Method GeneratePropertyDefaultCode(pContext As %DynamicObject) [ Private ]
+{
+    s propertySchema = pContext.Schema
+    q:'..CompilerFlags.UseDefaults!('propertySchema.%IsDefined("default"))
+    
+    s datatype=..CodeType(propertySchema.type)
+    s dataRef = pContext.DataRef
+    s defaultValue = propertySchema.default
+    s FunctionName = pContext.TargetFunc
+    $$$CWriteLine(" ; Applying default for missing property", FunctionName)    
+    s defaultLiteral = ..GetJsonLiteral(datatype,defaultValue)
+    $$$WriteLine($$$FormatText(" s %1=%2",dataRef,defaultLiteral), FunctionName)
+}
+
+/// Converts a %DynamicAbstractObject value (from schema.default) into a safe ObjectScript literal.
+ClassMethod GetJsonLiteral(DataTypeCode, DefaultValue) As %String [ Internal ]
+{
+	If (DataTypeCode=6){
+		Return """"_DefaultValue_""""
+	}
+    If DataTypeCode=9!(DataTypeCode=4) {
+	    Return DefaultValue 
+    }
+    If DataTypeCode=18 {
+    }
+    If DataTypeCode=17 {
+    }
+    If DataTypeCode=2 {
+    }
+    return """"
 }
 
 Method configfunc(pContext) [ Internal, Private ]
@@ -1102,7 +1168,7 @@ Method configfunc(pContext) [ Internal, Private ]
 Method basicinfo(pContext) [ Internal, Private ]
 {
 	s FunctionName = pContext.TargetFunc
-	$$$WriteLine(" q 1 ; no direct routine execute",FunctionName)
+	$$$WriteLine(" q 1",FunctionName)
 	q:'..CompilerFlags.GenerateComments
 	s schema = pContext.Schema
 	$$$WriteLine(" ;Generated by "_$classname()_" at "_$ZDT($NOW()),FunctionName)
