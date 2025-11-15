@@ -17,15 +17,11 @@ Class FastJsonSchema.Core Extends %RegisteredObject
 /// </EXAMPLE>
 ClassMethod Compile(pSchema As %DynamicObject = "", pSchemaName As %String = "", CompileParameters = "SPEED") As %Status
 {
-	d $SYSTEM.Process.Undefined(2)
+	Do $SYSTEM.Process.Undefined(2)
 
 	Set:'$IsObject(pSchema) pSchema = {}.%FromJSON(pSchema)
-	If '$IsObject(pSchema) {
-		Return $$$ERROR($$$GeneralError, "Invalid JSON schema provided.")
-	}
-	If $Get(pSchemaName)="" {
-		Set pSchemaName = $TRanslate($Horolog,",")
-	}
+	If '$IsObject(pSchema) Return $$$ERROR($$$GeneralError, "Invalid JSON schema provided.")
+	Set:$Get(pSchemaName)="" pSchemaName = $TRanslate($Horolog,",")
 	Set st=..IsSchemaImplemented(pSchema."$schema",.schemaCls)
 	If $$$ISERR(st) Return st
 	Set st = ##class(FastJsonSchema.Compiler.Parameters).Create(CompileParameters,.CompileParamsObj)
@@ -46,16 +42,24 @@ ClassMethod Compile(pSchema As %DynamicObject = "", pSchemaName As %String = "",
 /// </EXAMPLE>
 ClassMethod Validate(pSchemaName As %String = "", pJson As %DynamicObject) As %Status
 {
+	Do $SYSTEM.Process.Undefined(2)
+
 	If $Get(pSchemaName)="" {
 		Return $$$ERROR($$$GeneralError, "Schema name is required for validation.")
 	}
 	If pJson="" {
 		Return $$$ERROR($$$GeneralError, "JSON is required for validation.")
 	}
-	If $IsObject(pJson) {
-		Set pJson = pJson.%ToJSON()
+	If '$IsObject(pJson) {
+		Set pJson = {}.%FromJSON(pJson)
 	}
-	Return $Xecute("quit $$%validate^fjsschema."_pSchemaName_"("_pJson_") ")
+	; assume packagename is already set
+	If pSchemaName'["."{
+		Set pSchemaName="fjsschema."_pSchemaName
+	}
+	Set executeCode = $$$FormatText("(pJson) quit $$%validate^%1(pJson)", pSchemaName)
+	Set status= $Xecute(executeCode, pJson)
+	Return status
 }
 
 ClassMethod IsSchemaImplemented(pSchema As %String = "", Output pSchemaClass As %String) As %Boolean

@@ -25,7 +25,7 @@ Method CompileToInternal(pSchema) As %Status [ Internal, Private ]
 	k %fjscode
 	try{
 		d ..GenerateValidator(pSchema)
-		s sc= ..Savefjs()
+		s sc=..Savefjs()
 	}
 	catch ex{
 		s sc=ex.AsStatus()
@@ -35,7 +35,7 @@ Method CompileToInternal(pSchema) As %Status [ Internal, Private ]
 
 Method GenerateValidator(pRootSchema)
 {
- 	S pContext = ..CreateContext(pRootSchema)
+ 	s pContext = ..CreateContext(pRootSchema)
  	d ..basicinfo(pContext)
 	d ..configfunc(pContext)
     d ..GenerateCode(pContext)
@@ -48,17 +48,17 @@ Method GenerateCode(pContext As %DynamicAbstractObject = "") [ Private ]
 	s FunctionName = pContext.TargetFunc
 
     #;If $ref is present, process it and QUIT the function immediately to skip all sibling keywords.
-    if schema.%IsDefined("$ref") d ..GenerateRefCode(pContext) q
+    i schema.%IsDefined("$ref") d ..GenerateRefCode(pContext) q
 
 	#; Handle root level combinators (allOf, oneOf, anyOf)
 	#; These checks run first against the entire current object/dataRef.
-	if schema.%IsDefined("allOf") {
+	i schema.%IsDefined("allOf") {
 		d ..GenerateCombinatorValidation("allOf", pContext)
 	}
-	if schema.%IsDefined("oneOf") {
+	i schema.%IsDefined("oneOf") {
 		d ..GenerateCombinatorValidation("oneOf", pContext)
 	}
-	if schema.%IsDefined("anyOf") {
+	i schema.%IsDefined("anyOf") {
 		d ..GenerateCombinatorValidation("anyOf", pContext)
 	}
 
@@ -79,11 +79,11 @@ Method GenerateCode(pContext As %DynamicAbstractObject = "") [ Private ]
     s iter = "" ; Initialize iter to $null
 
 	#;Determine Iteration Source (Array or Object)
-	if schema.type = "array" || (schema.%IsDefined("items")) {
+	i schema.type = "array" || (schema.%IsDefined("items")) {
 		q:'schema.%IsDefined("items") ; Quit if array is defined but items are not
 		$$$CWriteLine(" ;validate array items schema",FunctionName)
 
-		if 'schema.items.%IsA("%DynamicArray") { ; Single item schema in array (List Validation)
+		i 'schema.items.%IsA("%DynamicArray") { ; Single item schema in array (List Validation)
 			d $method(,"singleArr",pContext)
 			q
 		}
@@ -97,11 +97,11 @@ Method GenerateCode(pContext As %DynamicAbstractObject = "") [ Private ]
 		s iter = schema.properties.%GetIterator()
 	}
     #; Iterate Properties/items
-    if $IsObject(iter) {
+    i $IsObject(iter) {
 	    while iter.%GetNext(.prop, .PropertySchema) {
 
             #; Determine Data Reference Path (Handle array index vs. object key)
-            if isArrayContext {
+            i isArrayContext {
                 s dataRef = pContext.DataRef_ ".%Get("_prop_")"
             }
             else{
@@ -148,7 +148,7 @@ Method GenerateMultiTypeCode(pContext As %DynamicAbstractObject, pIterator As %D
         s tempSchema = ##Class(%DynamicAbstractObject).%FromJSON(pContext.Schema.%ToJSON())
         s tempSchema.type = arrPropType
         s contextObj = ..CreateContext( tempSchema, DataRef, "THROW", FunctionName)
-        if (arrPropType="object") || (arrPropType="array") {
+        i (arrPropType="object") || (arrPropType="array") {
             d ..GenerateCode(contextObj)
         } else {
             d $method(, arrPropType, contextObj)
@@ -167,25 +167,26 @@ Method GenerateMultiTypeCode(pContext As %DynamicAbstractObject, pIterator As %D
     #;Final Check: If the loop finishes without success, throw the overall error.
     $$$WriteLine(" ; Final check: Did the data match any type?", FunctionName)
     s failureCode = ..GetFailureCode(pContext,"datatype")
-    $$$WriteLine(" i '"_SuccessVar_failureCode, FunctionName)
+    $$$WriteLine(" i '"_SuccessVar_" "_failureCode, FunctionName)
 }
 
+/// no longer using
 Method GenerateCodeOld(pContext As %DynamicAbstractObject = "") [ Deprecated, Private ]
 {
 	s schema = pContext.Schema
 	s FunctionName = pContext.TargetFunc
 
-    if schema.%IsDefined("$ref") d ..GenerateRefCode(pContext) q
+    i schema.%IsDefined("$ref") d ..GenerateRefCode(pContext) q
 
 	#;Handle root level combinators (allOf, oneOf, anyOf)
 	#; These checks run first against the entire current object/dataRef.
-	if schema.%IsDefined("allOf") {
+	i schema.%IsDefined("allOf") {
 		d ..GenerateCombinatorValidation("allOf", pContext)
 	}
 	if schema.%IsDefined("oneOf") {
 		d ..GenerateCombinatorValidation("oneOf", pContext)
 	}
-	if schema.%IsDefined("anyOf") {
+	i schema.%IsDefined("anyOf") {
 		d ..GenerateCombinatorValidation("anyOf", pContext)
 	}
 	// Runs right after other combinators (if implemented)
@@ -296,12 +297,12 @@ Method GenerateMaxAndMinPropertiesCode(pContext As %DynamicAbstractObject) [ Pri
 
     $$$WriteLine(" s keyCount = "_ pContext.DataRef _ ".%Size()", FunctionName)
 
-    if schema.%IsDefined("maxProperties") {
+    i schema.%IsDefined("maxProperties") {
         s maxProps = schema.maxProperties
         s failureCode = ..GetFailureCode(pContext, "maxProperties")
         s code = $$$FormatText(" i keyCount>%1 %2", maxProps, failureCode)
     }
-    if schema.%IsDefined("minProperties") {
+    i schema.%IsDefined("minProperties") {
         s minProps = schema.minProperties
         s failureCode = ..GetFailureCode(pContext, "minProperties")
         s code = $$$FormatText(" i keyCount<%1 %2", minProps, failureCode)
@@ -320,8 +321,8 @@ Method GenerateAddPropertiesCode(pContext As %DynamicAbstractObject) [ Private ]
     q:'schema.%IsDefined("additionalProperties")
 
     s apSchema = schema.additionalProperties
-    s knownProps = schema.properties
-
+    ;s knownProps = schema.properties
+	$$$WriteLine(" s knownProps="_DataRef_".properties", FunctionName)
     $$$WriteLine(" ; Start checking additionalProperties", FunctionName)
     $$$WriteLine(" s iter = "_ DataRef _ ".%GetIterator()", FunctionName)
 
@@ -332,7 +333,7 @@ Method GenerateAddPropertiesCode(pContext As %DynamicAbstractObject) [ Private ]
     $$$WriteLine("  if knownProps.%IsDefined(key) continue", FunctionName)
 
     #; additionalProperties: false (Strict exclusion)
-    if '$iso(apSchema) {
+    i '$iso(apSchema) {
 	    s oldFailureMode = pContext.FailureMode
         s pContext.FailureMode="ret"
         s failureCode = ..GetFailureCode(pContext, "additionalProperties")
@@ -405,7 +406,7 @@ Method GenerateDependenciesCode(pContext As %DynamicAbstractObject) [ Private ]
 
         s QuotedProp = """"_requiredProp_""""
         $$$WriteLine(" if "_ DataRef _ ".%IsDefined("_ QuotedProp _ ") {", FunctionName)
-        if $IsObject(dependency) && dependency.%IsA("%DynamicArray") {
+        i $IsObject(dependency) && dependency.%IsA("%DynamicArray") {
 
             #; Property Dependency (e.g., "credit_card": ["billing_address", "security_code"])
             s targetPropIter = dependency.%GetIterator()
@@ -449,7 +450,7 @@ Method GenerateRefCode(pContext As %DynamicAbstractObject) [ Private ]
     s FunctionName = pContext.TargetFunc
     s refString = schema."$ref"
     s targetSchema = ..ResolveReference(refString, schema)
-    if '$IsObject(targetSchema) {
+    i '$IsObject(targetSchema) {
         s failureMsg = "Failed to resolve schema reference: "_ refString
         $$$WriteLine($$$FormatText(" q $$Error^%%apiOBJ(5002, %1)", """" _ failureMsg _ """"), FunctionName)
         q
@@ -514,7 +515,7 @@ ClassMethod ResolveExternalReference(pRefString, pRootSchema) As %DynamicAbstrac
         s sc = httpRequest.Get()
         s httpResponse =  httpRequest.HttpResponse
         s httpStatus =httpResponse.StatusCode
-        if (sc && (httpStatus = 200)) {
+        i (sc && (httpStatus = 200)) {
             s jsonStream = httpResponse.Data
             i httpRequest.HttpResponse.ContentType="application/json" {
             	s schemaObject = ##class(%DynamicObject).%FromJSON(jsonStream)
@@ -581,7 +582,7 @@ Method CheckRequiredProps(pContext) [ Private ]
 		$$$WriteLine(code,FunctionName)
 	}
 	;s failureCode = ..GetFailureCode(pContext,"datatype")
-	if pContext.FailureMode="THROW" {
+	i pContext.FailureMode="THROW" {
 		set quitType="throw"
 	}
 	else{
@@ -604,11 +605,11 @@ Method string(pContext)
 		s failureCode = ..GetFailureCode(pContext,$$$strDT)
 		i pContext.IsPrimitiveVar {
 			#;Array Item Context (Local Variable)
-			s generatedCode = $$$FormatText(" i $ISVALIDNUM(%1)%2", dataRef, failureCode)
+			s generatedCode = $$$FormatText(" i $ISVALIDNUM(%1) %2", dataRef, failureCode)
 		}
 		Else{
 			if dataRef["%Get" {
-				s generatedCode=$$$FormatText(" i %1.%GetTypeCodeOf(%2)"_failureCode,$p(dataRef,".%Get("),$p($p(dataRef,".%Get(",2),")"))
+				s generatedCode=$$$FormatText(" i %1.%GetTypeCodeOf(%2) "_failureCode,$p(dataRef,".%Get("),$p($p(dataRef,".%Get(",2),")"))
 			}
 			else{
 				s generatedCode = $$$FormatText(" i %1.%GetTypeCodeOf(""%2"")'=6 "_failureCode, $p(dataRef,".",1,*-1),$S($p(dataRef,".",*)["""":$TR($p(dataRef,".",*),""""),1:$p(dataRef,".",*)))
@@ -643,11 +644,11 @@ Method integer(pContext)
 		s failureCode = ..GetFailureCode(pContext,$$$intDT)
 		i pContext.IsPrimitiveVar {
 			#;Array Item Context (Local Variable)
-			s generatedCode = $$$FormatText(" i '$ISVALIDNUM(%1)%2", dataRef, failureCode)
+			s generatedCode = $$$FormatText(" i '$ISVALIDNUM(%1) %2", dataRef, failureCode)
 		}
 		else{
-			if dataRef["%Get" {
-				s generatedCode=$$$FormatText(" i %1.%GetTypeCodeOf(%2)"_failureCode,$p(dataRef,".%Get("),$p($p(dataRef,".%Get(",2),")"))
+			i dataRef["%Get" {
+				s generatedCode=$$$FormatText(" i %1.%GetTypeCodeOf(%2) "_failureCode,$p(dataRef,".%Get("),$p($p(dataRef,".%Get(",2),")"))
 			}
 			else{
 				s generatedCode = $$$FormatText(" i %1.%GetTypeCodeOf(%2)'=9 "_failureCode, $p(dataRef,".",1,*-1),$p(dataRef,".",*))
@@ -676,8 +677,8 @@ Method boolean(pContext)
 			s generatedCode = $$$FormatText(" i '$ISVALIDNUM(%1)%2", dataRef, failureCode)
 		}
 		else{
-			if dataRef["%Get" {
-				s generatedCode=$$$FormatText(" i %1.%GetTypeCodeOf(%2)"_failureCode,$p(dataRef,".%Get("),$p($p(dataRef,".%Get(",2),")"))
+			i dataRef["%Get" {
+				s generatedCode=$$$FormatText(" i %1.%GetTypeCodeOf(%2) "_failureCode,$p(dataRef,".%Get("),$p($p(dataRef,".%Get(",2),")"))
 			}
 			else {
 				s generatedCode = $$$FormatText(" i %1.%GetTypeCodeOf(""%2"")'=3 "_failureCode, $p(dataRef,".",1,*-1),$p(dataRef,".",*))
@@ -700,7 +701,7 @@ Method null(pContext)
 	S SkipGenerate = pContext.SkipGenerate
 	$$$CWriteLine(" ;null method validation for "_dataRef,FunctionName)
 	s failureCode =..GetFailureCode(pContext,$$$nullDT)
-	I 'SkipGenerate {
+	i 'SkipGenerate {
 		i pContext.IsPrimitiveVar {
 			#;Array Item Context (Local Variable)
 			s generatedCode = $$$FormatText(" i '$ISVALIDNUM(%1)%2", dataRef, failureCode)
@@ -723,25 +724,25 @@ Method array(pContext)
 Method GetFailureCode(pContext As %DynamicAbstractObject, constraintType As %String) As %String
 {
     s rtn = " q 0"
-    Set pMode = pContext.FailureMode
-    Set pDataRef = pContext.DataRef
+    s pMode = pContext.FailureMode
+    s pDataRef = pContext.DataRef
     s propNameForMsg = $TR($P(pDataRef, ".", *), """")
 
     #;Check for array index access (e.g., DataRef.%Get(2))
-    if propNameForMsg["%Get(" {
+    i propNameForMsg["%Get(" {
         s propNameForMsg = "index " _ +$P(propNameForMsg, "%Get(", 2)
     }
     #; Handle root object reference
-    if (propNameForMsg = "") || (propNameForMsg = "%JSON") {
+    i (propNameForMsg = "") || (propNameForMsg = "%JSON") {
         s propNameForMsg = "ROOT object"
     }
     s genericMsg = ..ErrorMap.%Get(constraintType)
     s errorMsg = $Replace(genericMsg, "%", propNameForMsg)
     i pMode = "THROW" {
-        s rtn = " throw"
+        s rtn = "throw"
     }
     elseif (pMode = "ret") || (pMode = "q") {
-        s rtn = $$$FormatText(" "_pMode_" $$Error^%apiOBJ(5001,""%1"")", errorMsg)
+        s rtn = $$$FormatText(pMode_" $$Error^%apiOBJ(5001,""%1"")", errorMsg)
     }
     q rtn
 }
@@ -848,7 +849,7 @@ Method GenerateLenCode(pContext)
         q ""
     }
 
-    if min'=""&&(max'=""){
+    i min'=""&&(max'=""){
 	    s error = ..GetFailureCode(pContext,"maxmin")
 	    s code = $$$FormatText(" i '$IsValidNum(%1,,%2,%3) %4", lenExpr, min, max, error)
     }
@@ -967,7 +968,7 @@ Method GenerateIfThenElseCode(pContext As %DynamicAbstractObject) [ Private ]
     $$$WriteLine(" if "_ IfCheckVar _ " {", FunctionName)
 
     #; then Block: Recursively validate against the 'then' schema if it exists
-    if schema.%IsDefined("then") {
+    i schema.%IsDefined("then") {
         s thenContext = ..CreateContext(schema."then", DataRef, "THROW", FunctionName)
         $$$WriteLine("  ; Applying THEN schema", FunctionName)
         d ..GenerateCode(thenContext) // THROW mode here will fail the entire process if 'then' fails
@@ -977,7 +978,7 @@ Method GenerateIfThenElseCode(pContext As %DynamicAbstractObject) [ Private ]
     $$$WriteLine(" } else {", FunctionName)
 
     #; Else Block: Recursively validate against the 'else' schema if it exists
-    if schema.%IsDefined("else") {
+    i schema.%IsDefined("else") {
         s elseContext = ..CreateContext(schema."else", DataRef, "THROW", FunctionName)
         $$$WriteLine("  ; Applying ELSE schema", FunctionName)
         d ..GenerateCode(elseContext) // THROW mode here will fail the entire process if 'else' fails
@@ -994,7 +995,7 @@ $case(datatype,"string":6,"integer":9,"number":9,"boolean":4,"object":18,"array"
 
 Method WriteCodeToTarget(pCode, pFunctionName = "")
 {
-    if pFunctionName="" {
+    i pFunctionName="" {
 	    s %fjscode("0fjs",$i(%fjscode)) = pCode
     }
     else {
@@ -1057,7 +1058,7 @@ Method GenerateCombinatorValidation(alloneanyOf As %String, pContext As %Dynamic
         $$$WriteLine("  s comboPasses = comboPasses + 1", functionName)
 		$$$WriteLine(" } catch {}", functionName)
     }
-    if alloneanyOf="oneOf" {
+    i alloneanyOf="oneOf" {
         #;Must match exactly one: comboPasses must equal 1.
         $$$WriteLine($$$FormatText(" i comboPasses'=1 %1", ..GetFailureCode(pContext,"oneOf")), functionName)
     }
@@ -1086,21 +1087,21 @@ Method GenerateContentEncodingCode(pContext) [ Internal, Private ]
 
 Method configfunc(pContext) [ Internal, Private ]
 {
-	set FunctionName = pContext.TargetFunc
+	s FunctionName = pContext.TargetFunc
 	s schema = pContext.Schema
 	s DataRef = pContext.DataRef
 	$$$WriteLine("%validate("_DataRef_")",FunctionName)
+	$$$WriteLine(" s $zt=""err""",FunctionName)
 	$$$WriteLine(" d $zu(18,2)",FunctionName)
 	$$$WriteLine(" s $ze="""",$ec="""" ",FunctionName)
 	$$$WriteLine(" n ("_DataRef_")",FunctionName)
-	$$$WriteLine(" s $et=""q $ze""",FunctionName)
 	$$$WriteLine(" s:'$iso("_DataRef_") %JSON={}.%FromJSON(%JSON)",FunctionName)
 	$$$WriteLine(" i '$iso(%JSON)||('%JSON.%IsA(""%DynamicAbstractObject"")) q $$Error^%apiOBJ(16002)",FunctionName)
 }
 
 Method basicinfo(pContext) [ Internal, Private ]
 {
-	set FunctionName = pContext.TargetFunc
+	s FunctionName = pContext.TargetFunc
 	$$$WriteLine(" q 1 ; no direct routine execute",FunctionName)
 	q:'..CompilerFlags.GenerateComments
 	s schema = pContext.Schema
@@ -1115,7 +1116,8 @@ Method basicinfo(pContext) [ Internal, Private ]
 Method Savefjs(FunctionName = "0fjs") [ Internal, Private ]
 {
 	$$$WriteLine(" q 1",FunctionName)
-	if ..CompilerFlags.PackageName'="" {
+	$$$WriteLine("err ret $ze",FunctionName)
+	i ..CompilerFlags.PackageName'="" {
 		s package=..CompilerFlags.PackageName
 	}
 	else{

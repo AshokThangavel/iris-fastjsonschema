@@ -1,19 +1,20 @@
 Class FastJsonSchema.Test.Draft7 Extends %RegisteredObject
 {
 
-ClassMethod RunSingleTest(pSchemaName = "Test1", pSchema As %DynamicObject = "", CompileParameters = "DEBUG")
+ClassMethod RunSingleTest(pSchemaName = "Test8", pSchema As %DynamicObject = "", CompileParameters = "DEBUG")
 {
-	Set pSchema = ##class(FastJsonSchema.Test.Data.Draft7).SampleSchema1()
+	Set pSchema = ##class(FastJsonSchema.Test.Data.Draft7).SampleSchema8()
 	Set sc = ##class(FastJsonSchema.Core).Compile(pSchema, pSchemaName, CompileParameters)
 	if $$$ISERR(sc) W $SYSTEM.OBJ.DisplayError(sc)
 }
 
-ClassMethod RullAllTest(pSchemaName = "", pSchema As %DynamicObject = "", CompileParameters)
+ClassMethod RullAllTest(pSchemaName = "", pSchema As %DynamicObject = "", CompileParameters = "DEBUG")
 {
 	F i=1:1:18 {
 		s pSchemaName = "Test"_i
 		s pSchema = $ClassMethod("FastJsonSchema.Test.Data.Draft7","SampleSchema"_i)
-		Set sc = ##class(FastJsonSchema.Core).Compile(pSchemaName, pSchema, CompileParameters="DEBUG")
+		continue:'$iso(pSchema)
+		Set sc = ##class(FastJsonSchema.Core).Compile(pSchema, pSchemaName, CompileParameters)
 		if $$$ISERR(sc) W $SYSTEM.OBJ.DisplayError(sc)
 	}
 }
