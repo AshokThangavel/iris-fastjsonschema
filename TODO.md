@@ -8,3 +8,4 @@ A list of pending tasks and planned improvements for this project.
 - [ ] Implement logic for `contentEncoding`
 - [ ] not
 - [ ] $ref external reference
+- [ ] Implement Default vaues for object and array
