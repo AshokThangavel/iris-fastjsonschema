@@ -3,26 +3,28 @@ Include %occIO
 Class FastJsonSchema.Compiler.Base Extends %RegisteredObject
 {
 
-Property Name As %String;
+Property Name As %String(MAXLEN = 40);
 
 Property ErrorMap As %DynamicObject [ Internal ];
 
 Property CompilerFlags As FastJsonSchema.Compiler.Parameters;
 
+Parameter PPGFJSVar = "^||fjsvar";
+
 ClassMethod Compile(pSchemaName = "", pSchema As %DynamicObject = "", CompileParamsObj As %Boolean = 0) As %Status
 {
 	d ..OnBeforeCompile()
-	s st=..%New(pSchemaName, CompileParamsObj).CompileToInternal(pSchema)
+	s st=..%New(pSchemaName, CompileParamsObj).CompileToObjScript(pSchema)
 	d ..OnAfterCompile()
 	q st
 }
 
-Method CompileToInternal(pSchema) As %Status [ Internal, Private ]
+Method CompileToObjScript(pSchema) As %Status [ Internal, Private ]
 {
 	d $SYSTEM.Process.Undefined(2)
 	#dim sc As %Status
 
-	k %fjscode
+	k %fjscode,@..#PPGFJSVar
 	try{
 		d ..GenerateValidator(pSchema)
 		s sc=..Savefjs()
@@ -30,6 +32,7 @@ Method CompileToInternal(pSchema) As %Status [ Internal, Private ]
 	catch ex{
 		s sc=ex.AsStatus()
 	}
+	k %fjscode,@..#PPGFJSVar
 	q sc
 }
 
@@ -71,7 +74,7 @@ Method GenerateCode(pContext As %DynamicAbstractObject = "") [ Private ]
 	d ..GeneratePatternPropertiesCode(pContext)
 	d ..GenerateDependenciesCode(pContext)
 
-	$$$CWriteLine(" ; schema type is "_ schema.type,FunctionName)
+	$$$CWriteLine(" ;schema type is "_ schema.type,FunctionName)
 
 	d ..CheckRequiredProps(pContext)
 
@@ -136,7 +139,7 @@ Method GenerateMultiTypeCode(pContext As %DynamicAbstractObject, pIterator As %D
     s DataRef = pContext.DataRef
     s FunctionName = pContext.TargetFunc
     s SuccessVar = "multitypesuccess"
-    $$$CWriteLine(" ; Multi-type validation check (OR logic)", FunctionName)
+    $$$CWriteLine(" ;Multi-type validation check (OR logic)", FunctionName)
     $$$WriteLine(" s "_SuccessVar_" = 0", FunctionName)
 
     #; Loop through each allowed type in the schema.type array
@@ -162,7 +165,7 @@ Method GenerateMultiTypeCode(pContext As %DynamicAbstractObject, pIterator As %D
     }
 
     #;Final Check: If the loop finishes without success, throw the overall error.
-    $$$CWriteLine(" ; Final check: Did the data match any type?", FunctionName)
+    $$$CWriteLine(" ;Final check: Did the data match any type?", FunctionName)
     s failureCode = ..GetFailureCode(pContext,"datatype")
     $$$WriteLine(" i '"_SuccessVar_" "_failureCode, FunctionName)
 }
@@ -180,7 +183,7 @@ Method GenerateCodeOld(pContext As %DynamicAbstractObject = "") [ Deprecated, Pr
 	i schema.%IsDefined("allOf") {
 		d ..GenerateCombinatorValidation("allOf", pContext)
 	}
-	if schema.%IsDefined("oneOf") {
+	i schema.%IsDefined("oneOf") {
 		d ..GenerateCombinatorValidation("oneOf", pContext)
 	}
 	i schema.%IsDefined("anyOf") {
@@ -205,11 +208,11 @@ Method GenerateCodeOld(pContext As %DynamicAbstractObject = "") [ Deprecated, Pr
 	s isArrayContext = 0
 
 	#;Determine Iteration Source (Array or Object)
-	if schema.type = "array" || (schema.%IsDefined("items")) {
+	i schema.type = "array" || (schema.%IsDefined("items")) {
 		q:'schema.%IsDefined("items") ; Quit if array is defined but items are not
 		$$$CWriteLine(" ;validate array items schema",FunctionName)
 
-		if 'schema.items.%IsA("%DynamicArray") { ; Single item schema in array
+		i 'schema.items.%IsA("%DynamicArray") { ; Single item schema in array
 			d $method(,"singleArr",pContext)
 			q
 		}
@@ -250,7 +253,7 @@ Method GenerateCodeOld(pContext As %DynamicAbstractObject = "") [ Deprecated, Pr
 		#; Property level dispatch
 
         #;Combinators (Highest Priority) - Uses the unified method
-        if PropertySchema.%IsDefined("oneOf") {
+        i PropertySchema.%IsDefined("oneOf") {
             d ..GenerateCombinatorValidation("oneOf", contextObj)
         } elseif PropertySchema.%IsDefined("anyOf") {
             d ..GenerateCombinatorValidation("anyOf", contextObj)
@@ -262,7 +265,7 @@ Method GenerateCodeOld(pContext As %DynamicAbstractObject = "") [ Deprecated, Pr
         elseif $iso(PropertySchema.type) {
             s arriter = PropertySchema.type.iterator()
             while arriter.%GetNext(,.arrPropType) {
-                if (arrPropType="object") || (arrPropType="array") {
+                i (arrPropType="object") || (arrPropType="array") {
                     s recursiveContext = ..CreateContext(PropertySchema, contextObj.DataRef, contextObj.FailureMode, contextObj.TargetFunc)
                     d $method(,"GenerateCode", recursiveContext)
                 } else {
@@ -589,6 +592,24 @@ Method CheckRequiredProps(pContext) [ Private ]
 	$$$WriteLine(" "_quitType_":missing'="""" $$Error^%apiOBJ(5001,""Required properties missing: ""_$e(missing,1,*-1))",FunctionName)
 }
 
+/// create a local variable reference for json key
+Method CreateLocalVarRef(pContext As %DynamicObject, propName As %String)
+{
+	i ..CompilerFlags.IsHighOptimizeLevel() {
+	    #;Generate unique name and INCREMENT counter - make it to single static variable in future
+	    s localRefName = "jsval"_$I(@..#PPGFJSVar)
+	    #;GENERATE the critical assignment code into the compiled routine
+	    $$$WriteLine(" s "_localRefName_" = "_pContext.DataRef, FunctionName)
+	    #;Store the name for downstream validators to use
+	    s pContext.FastDataRef = localRefName
+	}
+}
+
+Method ResetLovalVarRef(pContext As %DynamicObject) [ Internal, Private ]
+{
+ d pContext.%Remove("FastDataRef")
+}
+
 Method string(pContext)
 {
 	s schema = pContext.Schema
@@ -598,23 +619,24 @@ Method string(pContext)
 	S SkipGenerate = pContext.SkipGenerate
 
 	$$$CWriteLine(" ;string method validation for "_dataRef,FunctionName)
-
 	i 'SkipGenerate {
 		s failureCode = ..GetFailureCode(pContext,$$$strDT)
 		i pContext.IsPrimitiveVar {
 			#;Array Item Context (Local Variable)
-			s generatedCode = $$$FormatText(" i $ISVALIDNUM(%1) %2", dataRef, failureCode)
+			s generatedCode = $$$FormatText(" i $Isvalidnum(%1) %2", dataRef, failureCode)
 		}
 		Else{
-			if dataRef["%Get" {
+			i dataRef["%Get" {
 				s generatedCode=$$$FormatText(" i %1.%GetTypeCodeOf(%2) "_failureCode,$p(dataRef,".%Get("),$p($p(dataRef,".%Get(",2),")"))
 			}
 			else{
-				s generatedCode = $$$FormatText(" i %1.%GetTypeCodeOf(""%2"")'=6 "_failureCode, $p(dataRef,".",1,*-1),$S($p(dataRef,".",*)["""":$TR($p(dataRef,".",*),""""),1:$p(dataRef,".",*)))
+				s normalizedField=$TR($p(dataRef,".",*),"""")
+				s generatedCode = $$$FormatText(" i %1.%GetTypeCodeOf(""%2"")'=6 "_failureCode, $p(dataRef,".",1,*-1),normalizedField)
 			}
 		}
 		$$$WriteLine(generatedCode, FunctionName)
 	}
+	d ..CreateLocalVarRef(pContext)
 	d ..GeneratePropertyDefaultCode(pContext)
 	d ..GenerateLenCode(pContext)
 	d ..GeneratePatternCode(pContext)
@@ -622,6 +644,8 @@ Method string(pContext)
 	d ..GenerateFormatCode(pContext)
 	d ..GenerateConstCode(pContext)
 	d ..GenerateContentChecksCode(pContext)
+	d ..ResetLovalVarRef(pContext)
+	$$$CWriteLine(" ;end of string method validation for "_dataRef,FunctionName)
 }
 
 /// TODO: additional checks for number
@@ -639,6 +663,7 @@ Method integer(pContext)
 	s SkipGenerate = pContext.SkipGenerate
 
 	$$$CWriteLine(" ;integer method validation for "_dataRef,FunctionName)
+
 	i 'SkipGenerate {
 		s failureCode = ..GetFailureCode(pContext,$$$intDT)
 		i pContext.IsPrimitiveVar {
@@ -650,15 +675,19 @@ Method integer(pContext)
 				s generatedCode=$$$FormatText(" i %1.%GetTypeCodeOf(""%2"") "_failureCode,$p(dataRef,".%Get("),$p($p(dataRef,".%Get(",2),")"))
 			}
 			else{
-				s generatedCode = $$$FormatText(" i %1.%GetTypeCodeOf(""%2"")'=9 "_failureCode, $p(dataRef,".",1,*-1),$p(dataRef,".",*))
+				s normalizeField=$TR($p(dataRef,".",*),"""")
+				s generatedCode = $$$FormatText(" i %1.%GetTypeCodeOf(""%2"")'=9 "_failureCode, $p(dataRef,".",1,*-1),normalizeField)
 			}
 		}
 		$$$WriteLine(generatedCode,FunctionName)
 	}
+	d ..CreateLocalVarRef(pContext)
 	d ..GenerateLenCode(pContext)
 	d ..GenerateEnumCode(pContext)
 	d ..GenerateConstCode(pContext)
 	d ..GenerateMultipleOfCode(pContext)
+	d ..ResetLovalVarRef(pContext)
+    $$$CWriteLine(" ;end of integer method validation for "_dataRef,FunctionName)
 }
 
 Method boolean(pContext)
@@ -669,6 +698,12 @@ Method boolean(pContext)
 	s FailureMode = pContext.FailureMode
 	s SkipGenerate = pContext.SkipGenerate
 	$$$CWriteLine(" ;boolean method validation for "_dataRef,FunctionName)
+	i pContext.%IsDefined("FastDataRef") {
+		s FastDataRef=pContext.FastDataRef
+	}
+	else{
+		s FastDataRef=dataRef
+	}
 	i 'SkipGenerate {
 		s failureCode = ..GetFailureCode(pContext,$$$boolDT)
 		i pContext.IsPrimitiveVar {
@@ -680,16 +715,20 @@ Method boolean(pContext)
 				s generatedCode=$$$FormatText(" i %1.%GetTypeCodeOf(%2) "_failureCode,$p(dataRef,".%Get("),$p($p(dataRef,".%Get(",2),")"))
 			}
 			else {
-				s generatedCode = $$$FormatText(" i %1.%GetTypeCodeOf(""%2"")'=3 "_failureCode, $p(dataRef,".",1,*-1),$p(dataRef,".",*))
+				s normalizedField=$TR($p(dataRef,".",*),"""")
+				s generatedCode = $$$FormatText(" i %1.%GetTypeCodeOf(""%2"")'=3 "_failureCode, $p(dataRef,".",1,*-1),normalizedField)
 			}
 		}
 		$$$WriteLine(generatedCode,FunctionName)
-		$$$WriteLine($$$FormatText(" i $c(0,1)[$c(%1) %2",dataRef,failureCode),FunctionName)
+		//$$$WriteLine($$$FormatText(" i $c(0,1)[$c(%1) %2",FastDataRef,failureCode),FunctionName)
 	}
+	d ..CreateLocalVarRef(pContext)
 	d ..GeneratePropertyDefaultCode(pContext)
 	d ..GenerateConstCode(pContext)
 	d ..GenerateEnumCode(pContext)
 	d ..GenerateIfThenElseCode(pContext)
+	d ..ResetLovalVarRef(pContext)
+    $$$CWriteLine(" ;end of boolean method validation for "_dataRef,FunctionName)
 }
 
 Method null(pContext)
@@ -707,13 +746,17 @@ Method null(pContext)
 			s generatedCode = $$$FormatText(" i '$ISVALIDNUM(%1)%2", dataRef, failureCode)
 		}
 		else{
-			s generatedCode = $$$FormatText(" i %1.%GetTypeCodeOf(""%2"")'=2 "_failureCode, $p(dataRef,".",1,*-1),$S($p(dataRef,".",*)["""":$TR($p(dataRef,".",*),""""),1:$p(dataRef,".",*)))
+			s normalizedField=$TR($p(dataRef,".",*),"""")
+			s generatedCode = $$$FormatText(" i %1.%GetTypeCodeOf(""%2"")'=2 "_failureCode, $p(dataRef,".",1,*-1),normalizedField)
 		}
 		$$$WriteLine(generatedCode,FunctionName)
 	}
+	d ..CreateLocalVarRef(pContext)
 	d ..GeneratePropertyDefaultCode(pContext)
 	d ..GenerateEnumCode(pContext)
 	d ..GenerateConstCode(pContext)
+	d ..ResetLovalVarRef(pContext)
+    $$$CWriteLine(" ;end of null method validation for "_dataRef,FunctionName)
 }
 
 Method array(pContext)
@@ -727,29 +770,29 @@ Method GetFailureCode(pContext As %DynamicAbstractObject, constraintType As %Str
     s rtn = " q 0"
     s pMode = pContext.FailureMode
     s pDataRef = pContext.DataRef
-    s propNameForMsg = $TR($P(pDataRef, ".", *), """")
+    s propNameForMsg = $tr($p(pDataRef, ".", *), """")
 
     #;Check for array index access (e.g., DataRef.%Get(2))
     i propNameForMsg["%Get(" {
-        s propNameForMsg = "index " _ +$P(propNameForMsg, "%Get(", 2)
+        s propNameForMsg = "index " _ +$p(propNameForMsg, "%Get(", 2)
     }
     #; Handle root object reference
     i (propNameForMsg = "") || (propNameForMsg = "%JSON") {
         s propNameForMsg = "ROOT object"
     }
     s genericMsg = ..ErrorMap.%Get(constraintType)
-    s errorMsg = $Replace(genericMsg, "%", propNameForMsg)
+    s errorMsg = $replace(genericMsg, "%", propNameForMsg)
     i pMode = "THROW" {
         s rtn = "throw"
     }
     elseif (pMode = "ret") || (pMode = "q") {
-	    if ..CompilerFlags.DetailedExceptions {
+	    i ..CompilerFlags.DetailedExceptions {
 		    s rtn = $$$FormatText(pMode_" $$Error^%apiOBJ(5001,""%1"")", errorMsg)
 	    }
 	    else {
 		     s rtn = $$$FormatText(pMode_" ""%1""", errorMsg)
 	    }
-        
+
     }
     q rtn
 }
@@ -828,6 +871,7 @@ Method GenerateLenCode(pContext)
 	s PropertySchema = pContext.Schema
 	s type = PropertySchema.type
 	S dataRef = pContext.DataRef
+	i pContext.%IsDefined("FastDataRef") S dataRef=pContext.FastDataRef
 	S FunctionName= pContext.TargetFunc
 	$$$CWriteLine(" ; Size/Length validation check", FunctionName)
     i type= "string" {
@@ -879,6 +923,7 @@ Method GenerateEnumCode(pContext) [ Internal ]
     S dataRef = pContext.DataRef
     //s typeCode=..CodeType(schema.type)
     S functionName = pContext.TargetFunc
+    i pContext.%IsDefined("FastDataRef") S dataRef=pContext.FastDataRef
     $$$CWriteLine(" ; enum check",FunctionName)
 	s iter = schema.enum.%GetIterator(),enumList=""
 	while iter.%GetNext(,.enum) {
@@ -886,7 +931,7 @@ Method GenerateEnumCode(pContext) [ Internal ]
 	}
 	s:enumList'="" enumList="$lb("_$E(enumList,1,*-1)_")"
 
-	$$$CWriteLine(" ; enum check for "_dataRef,functionName)
+	$$$CWriteLine(" ;enum check for "_dataRef,functionName)
     s generatedCode = $$$FormatText(" i '$lf(%1,%2) %3",enumList, dataRef , ..GetFailureCode(pContext, "enum"))
     $$$WriteLine(generatedCode,functionName)
 }
@@ -897,8 +942,10 @@ Method GeneratePatternCode(pContext As %DynamicObject)
     q:'schema.%IsDefined("pattern")
     s pattern = schema.pattern
     s dataRef = pContext.DataRef
+
+	i pContext.%IsDefined("FastDataRef") S dataRef=pContext.FastDataRef
     s functionName = pContext.TargetFunc
-    $$$CWriteLine(" ; pattern check for "_dataRef,functionName)
+    $$$CWriteLine(" ;pattern check for "_dataRef,functionName)
     s generatedCode = $$$FormatText(" i '$match(%1,""%2"") %3", dataRef, pattern, ..GetFailureCode(pContext, "pattern"))
     $$$WriteLine(generatedCode,functionName)
 }
@@ -910,6 +957,8 @@ Method GenerateFormatCode(pContext)
     q:(format="")!('..CompilerFlags.UseFormats)
     s dataRef = pContext.DataRef
     s FunctionName = pContext.TargetFunc
+
+	i pContext.%IsDefined("FastDataRef") S dataRef=pContext.FastDataRef
 	$$$CWriteLine(" ;"_format_" format check "_dataRef,FunctionName)
 	s regex = ..RegexFormats(format)
 	s error = ..GetFailureCode(pContext, "format")
@@ -922,7 +971,8 @@ Method GenerateMultipleOfCode(pContext)
 	q:'schema.%IsDefined("multipleOf")
 	s dataRef = pContext.DataRef
 	s FunctionName = pContext.TargetFunc
-	$$$CWriteLine(" ; multipleOf check",FunctionName)
+	i pContext.%IsDefined("FastDataRef") S dataRef=pContext.FastDataRef
+	$$$CWriteLine(" ;multipleOf check",FunctionName)
 	s multipleOf=schema.multipleOf
 	s error = ..GetFailureCode(pContext, "multipleOf")
 	$$$WriteLine($$$FormatText(" i (%1/%2)[""."" %3",dataRef,multipleOf,error),FunctionName)
@@ -936,7 +986,9 @@ Method GenerateConstCode(pContext)
     s dataRef = pContext.DataRef
     s type=schema.type
     s FunctionName = pContext.TargetFunc
-	$$$CWriteLine(" ; const check",FunctionName)
+
+	i pContext.%IsDefined("FastDataRef") S dataRef=pContext.FastDataRef
+	$$$CWriteLine(" ;const check",FunctionName)
 	s error = ..GetFailureCode(pContext, "const")
 	$$$WriteLine($$$FormatText(" i %1'=""%2"" %3", dataRef, const, error),FunctionName)
 }
@@ -949,7 +1001,7 @@ Method GenerateIfThenElseCode(pContext As %DynamicAbstractObject) [ Private ]
     q:'schema.%IsDefined("if")
     s IfCheckVar = "IfCheckSuccess" ;We'll generate a temp variable named 'IfCheckSuccess'
 
-    $$$WriteLine(" ; Start if/then/else validation", FunctionName)
+    $$$WriteLine(" ;Start if/then/else validation", FunctionName)
 
     $$$WriteLine(" s "_ IfCheckVar _ " = 0", FunctionName) // Initialize flag to 0 (Failure)
     $$$WriteLine(" try {", FunctionName)
@@ -972,7 +1024,7 @@ Method GenerateIfThenElseCode(pContext As %DynamicAbstractObject) [ Private ]
     #; then Block: Recursively validate against the 'then' schema if it exists
     i schema.%IsDefined("then") {
         s thenContext = ..CreateContext(schema."then", DataRef, "THROW", FunctionName)
-        $$$WriteLine("  ; Applying THEN schema", FunctionName)
+        $$$WriteLine("  ;Applying THEN schema", FunctionName)
         d ..GenerateCode(thenContext) // THROW mode here will fail the entire process if 'then' fails
     }
 
@@ -982,12 +1034,12 @@ Method GenerateIfThenElseCode(pContext As %DynamicAbstractObject) [ Private ]
     #; Else Block: Recursively validate against the 'else' schema if it exists
     i schema.%IsDefined("else") {
         s elseContext = ..CreateContext(schema."else", DataRef, "THROW", FunctionName)
-        $$$WriteLine("  ; Applying ELSE schema", FunctionName)
+        $$$WriteLine("  ;Applying ELSE schema", FunctionName)
         d ..GenerateCode(elseContext) // THROW mode here will fail the entire process if 'else' fails
     }
 
     $$$WriteLine(" }", FunctionName) ; End runtime if/else
-    $$$CWriteLine(" ; End if/then/else validation", FunctionName)
+    $$$CWriteLine(" ;End if/then/else validation", FunctionName)
 }
 
 Method CodeType(datatype) [ CodeMode = expression, Internal ]
@@ -1051,7 +1103,7 @@ Method GenerateCombinatorValidation(alloneanyOf As %String, pContext As %Dynamic
         s isComplex = (type = "object") || (type = "array")
         s newContext = ..CreateContext( subSchema, dataRef, "THROW", functionName)
         $$$WriteLine( " try {", functionName)
-        if isComplex {
+        i isComplex {
             d ..GenerateCode(newContext)
         }
         else {
@@ -1113,7 +1165,7 @@ Method GenerateContentEncodingCode(pContext) [ Internal, Private ]
     q:contentEncoding=""
 
     s encoding = $zcvt(contentEncoding, "U")
-    If encoding = "BASE64" {
+    i encoding = "BASE64" {
     }
     Else {
     }
@@ -1124,30 +1176,31 @@ Method GeneratePropertyDefaultCode(pContext As %DynamicObject) [ Private ]
 {
     s propertySchema = pContext.Schema
     q:'..CompilerFlags.UseDefaults!('propertySchema.%IsDefined("default"))
-    
+
     s datatype=..CodeType(propertySchema.type)
     s dataRef = pContext.DataRef
     s defaultValue = propertySchema.default
     s FunctionName = pContext.TargetFunc
-    $$$CWriteLine(" ; Applying default for missing property", FunctionName)    
+    $$$CWriteLine(" ; Applying default for missing property", FunctionName)
     s defaultLiteral = ..GetJsonLiteral(datatype,defaultValue)
     $$$WriteLine($$$FormatText(" s %1=%2",dataRef,defaultLiteral), FunctionName)
 }
 
 /// Converts a %DynamicAbstractObject value (from schema.default) into a safe ObjectScript literal.
+/// TODO:
 ClassMethod GetJsonLiteral(DataTypeCode, DefaultValue) As %String [ Internal ]
 {
-	If (DataTypeCode=6){
+	i (DataTypeCode=6){
 		Return """"_DefaultValue_""""
 	}
-    If DataTypeCode=9!(DataTypeCode=4) {
-	    Return DefaultValue 
+    i DataTypeCode=9!(DataTypeCode=4) {
+	    Return DefaultValue
     }
-    If DataTypeCode=18 {
+    i DataTypeCode=18 {
     }
-    If DataTypeCode=17 {
+    i DataTypeCode=17 {
     }
-    If DataTypeCode=2 {
+    i DataTypeCode=2 {
     }
     return """"
 }
@@ -1158,10 +1211,9 @@ Method configfunc(pContext) [ Internal, Private ]
 	s schema = pContext.Schema
 	s DataRef = pContext.DataRef
 	$$$WriteLine("%validate("_DataRef_")",FunctionName)
-	$$$WriteLine(" s $zt=""err""",FunctionName)
-	$$$WriteLine(" d $zu(18,2)",FunctionName)
-	$$$WriteLine(" s $ze="""",$ec="""" ",FunctionName)
 	$$$WriteLine(" n ("_DataRef_")",FunctionName)
+	$$$WriteLine(" s $zt=""err"",$ze="""",$ec=""""",FunctionName)
+	$$$WriteLine(" d $zu(18,2)",FunctionName)
 	$$$WriteLine(" s:'$iso("_DataRef_") %JSON={}.%FromJSON(%JSON)",FunctionName)
 	$$$WriteLine(" i '$iso(%JSON)||('%JSON.%IsA(""%DynamicAbstractObject"")) q $$Error^%apiOBJ(16002)",FunctionName)
 }

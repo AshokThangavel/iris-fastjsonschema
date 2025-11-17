@@ -28,34 +28,41 @@ Property KeepSource As %Boolean [ InitialExpression = 0 ];
 
 /// Method called after instantiation to ensure all boolean flags are correctly set
 /// based on the user-defined OptimizationLevel.
-ClassMethod Create(pInput = "SPEED", Output obj As FastJsonSchema.Compiler.Parameters) As %Status
+ClassMethod Create(pFlag = "SPEED", Output CompilerParamsObj As FastJsonSchema.Compiler.Parameters) As %Status [ CodeMode = expression ]
 {
-	Set obj= ..%New()
-	Set st = obj.InitializeInternal(pInput)
-	Return st
+..%New().Initialize(pFlag, .CompilerParamsObj)
 }
 
-Method IsSpeedMode() [ CodeMode = expression ]
+Method IsHighOptimizeLevel() As %Boolean [ CodeMode = expression ]
 {
 ..OptimizationLevel="SPEED"
 }
 
-Method IsDebugMode() [ CodeMode = expression ]
+Method IsVerboseMode() As %Boolean [ CodeMode = expression ]
 {
-(..OptimizationLevel = "DEBUG")
+..OptimizationLevel="DEBUG"
 }
 
-Method InitializeInternal(pInput) As %Status [ Internal, Private ]
+Method IsBalancedMode() As %Boolean [ CodeMode = expression ]
 {
-	If pInput="" Set FLAG="SPEED"
-    If '$IsObject(pInput) {
-        Set FLAG = $Select(pInput'="":$ZConvert(pInput, "U"), 1:"SPEED")
-        Set ..OptimizationLevel = FLAG
+..OptimizationLevel="BALANCED"
+}
+
+Method IsCustomMode() As %Boolean [ CodeMode = expression ]
+{
+..OptimizationLevel="CUSTOM"
+}
+
+Method Initialize(pFlag, Output CompilerParamsObj As FastJsonSchema.Compiler.Parameters) As %Status [ Internal, Private ]
+{
+	If pFlag="" Set FLAG="SPEED"
+    If '$IsObject(pFlag) {
+        Set FLAG = $Select(pFlag'="":$ZConvert(pFlag, "U"), 1:"SPEED")
         Do $Method(, FLAG)
     }
     Else {
-        Set ..OptimizationLevel = $ZConvert(pInput.%Get("OptimizationLevel", "CUSTOM"), "U")
-        #dim iterator As %DynamicObject = pInput.%GetIterator()
+        Set ..OptimizationLevel = $ZConvert(pFlag.%Get("OptimizationLevel", "CUSTOM"), "U")
+        #dim iterator As %DynamicObject = pFlag.%GetIterator()
          While iterator.%GetNext(.key, .value) {
 	         If '##class(%Dictionary.CompiledProperty).%ExistsId($classname()_"||"_key) {
                 Return $$$ERROR($$$GeneralError,"Invalid flag "_key)
@@ -63,37 +70,39 @@ Method InitializeInternal(pInput) As %Status [ Internal, Private ]
             Set $Property(, key) = value
         }
     }
+    Set CompilerParamsObj = $this
     Return $$$OK
 }
 
-Method SPEED()
+Method SPEED() As %Status
 {
+	Set ..OptimizationLevel = "SPEED"
 	Set ..DetailedExceptions = 0
 	Set ..UseFormats = 1
 	Set ..UseContentChecks = 0
 	Set ..UseDefaults = 0
 	Set ..GenerateComments = 0
 	Set ..KeepSource = 0
+	Quit $$$OK
 }
 
-Method BALANCED()
+Method BALANCED() As %Status
 {
+	Set ..OptimizationLevel = "BALANCED"
 	Set ..DetailedExceptions = 1
 	Set ..UseFormats = 1
 	Set ..UseContentChecks = 0
 	Set ..UseDefaults = 1
 	Set ..GenerateComments = 0
 	Set ..KeepSource = 0
+	Quit $$$OK
 }
 
-Method DEBUG()
+Method DEBUG() As %Status
 {
-    Set ..DetailedExceptions = 1
-    Set ..UseFormats = 1
-    Set ..UseContentChecks = 1
-    Set ..UseDefaults = 1
-    Set ..GenerateComments = 1
-    Set ..KeepSource = 1
+	Set ..OptimizationLevel="DEBUG"
+    Set (..DetailedExceptions,..UseFormats,..UseContentChecks,..UseDefaults,..GenerateComments,..KeepSource) = 1
+    Quit $$$OK
 }
 
 }
