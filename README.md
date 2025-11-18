@@ -1,6 +1,8 @@
 # iris-fastjsonschema
 iris‑fastjsonschema is a lightweight, high-performance JSON Schema validation toolkit. It combines the simplicity and speed of fastjsonschema with additional support for “iris”-style schema definitions
 
+FastJsonSchema generates native ObjectScript code from the JSON Schemas and compiles it directly
+
 The `fastjsonschema` library is designed to support **[JSON Schema Draft-07](https://json-schema.org/draft-07/schema)**.  For more information, see the official specification.
 
 ### Usage
