@@ -20,5 +20,23 @@ The `Compile` and `Validate` methods require the following:
 - **SchemaName** — a `string` property
 - **schema / JSONObject** — a `%DynamicObject` or `%DynamicArray`
 
+## Testing
+The schema is already preloaded in the class **FastJsonSchema.Test.Data.Draft7**.
+
+To run all tests, execute:
+
+```objectscript
+do ##class(FastJsonSchema.Test.Draft7).RunAllTest()
+```
+To run a specific schema:
+
+```objectscript
+// Select a specific schema from Draft7 (schemas named SampleSchema*)
+set schema = ##class(FastJsonSchema.Test.Data.Draft7).SampleSchema19()
+set name="test19"
+// Run the test for that specific schema
+do ##class(FastJsonSchema.Test.Draft7).RunSingleTest(name, schema)
+```
 ## Contrbution
 👉 Check out our [Contributing Guidelines](./CONTRIBUTING.md) for more details.
+
